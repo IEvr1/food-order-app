@@ -1,0 +1,36 @@
+{
+  "name": "food-order-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "postinstall": "prisma generate",
+    "build": "node scripts/migrate-deploy-retry.mjs && prisma generate && next build",
+    "start": "next start -p 3002",
+    "lint": "eslint",
+    "dashboard:link": "node scripts/create-dashboard-link.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "@vis.gl/react-google-maps": "^1.8.3",
+    "date-fns": "^4.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "next": "16.2.4",
+    "prisma": "^6.16.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "twilio": "^6.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

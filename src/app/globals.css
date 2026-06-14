@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #18181b;
+  --primary: #ea580c;
+  --primary-hover: #c2410c;
+  --primary-soft: #fff7ed;
+  --success-soft: #ecfdf5;
+  --success-text: #065f46;
+  --error-soft: #fef2f2;
+  --error-text: #991b1b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-noto-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-noto-sans), Arial, Helvetica, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+*::selection {
+  background: color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

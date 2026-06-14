@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+}
+
+enum FulfillmentType {
+  PICKUP
+  DELIVERY
+}
+
+model Shop {
+  id                   String                @id @default(cuid())
+  name                 String
+  timezone             String                @default("Europe/Nicosia")
+  latitude             Float?
+  longitude            Float?
+  deliveryRadiusMeters Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  categories           MenuCategory[]
+  customers            Customer[]
+  orders               Order[]
+  sessions             ConversationSession[]
+  smsTokens            SmsLinkToken[]
+  closures             ShopClosure[]
+  hours                ShopHours[]
+}
+
+model ShopClosure {
+  id        String   @id @default(cuid())
+  shopId    String
+  startDate String
+  endDate   String
+  label     String?
+  createdAt DateTime @default(now())
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, startDate, endDate])
+}
+
+model ShopHours {
+  id        String @id @default(cuid())
+  shopId    String
+  weekday   Int
+  startHour Int
+  endHour   Int
+  shop      Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model MenuCategory {
+  id        String     @id @default(cuid())
+  shopId    String
+  name      String
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  shop      Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items     MenuItem[]
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  categoryId  String
+  name        String
+  description String?
+  priceCents  Int
+  sortOrder   Int          @default(0)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+}
+
+model Customer {
+  id        String                @id @default(cuid())
+  shopId    String
+  name      String
+  phoneE164 String
+  createdAt DateTime              @default(now())
+  shop      Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  orders    Order[]
+  sessions  ConversationSession[]
+
+  @@unique([shopId, phoneE164])
+}
+
+model Order {
+  id                     String          @id @default(cuid())
+  shopId                 String
+  customerId             String
+  orderNumber            Int
+  orderDate              String
+  fulfillmentType        FulfillmentType
+  deliveryAddress        String?
+  deliveryLat            Float?
+  deliveryLng            Float?
+  deliveryPlaceId        String?
+  deliveryDistanceMeters Int?
+  requestedAt            DateTime
+  subtotalCents          Int
+  totalCents             Int
+  status                 OrderStatus     @default(CONFIRMED)
+  locale                 String          @default("el")
+  notes                  String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  shop                   Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer               Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items                  OrderItem[]
+  smsTokens              SmsLinkToken[]
+
+  @@unique([shopId, orderDate, orderNumber])
+  @@index([shopId, status, requestedAt])
+  @@index([shopId, customerId, createdAt])
+}
+
+model OrderItem {
+  id                 String    @id @default(cuid())
+  orderId            String
+  menuItemId         String?
+  nameSnapshot       String
+  priceCentsSnapshot Int
+  quantity           Int
+  order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem           MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+}
+
+model ConversationSession {
+  id         String    @id @default(cuid())
+  shopId     String
+  customerId String?
+  state      String
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  shop       Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+}
+
+model SmsLinkToken {
+  id        String    @id @default(cuid())
+  shopId    String
+  orderId   String?
+  phoneE164 String
+  tokenHash String
+  shortCode String?   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, phoneE164])
+}

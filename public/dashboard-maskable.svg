@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Salon dashboard icon">
+  <rect width="512" height="512" fill="#7c3aed"/>
+  <circle cx="384" cy="136" r="48" fill="#f5f3ff" opacity=".9"/>
+  <rect x="88" y="128" width="232" height="56" rx="28" fill="#ffffff"/>
+  <rect x="88" y="226" width="336" height="56" rx="28" fill="#ddd6fe"/>
+  <rect x="88" y="324" width="256" height="56" rx="28" fill="#ffffff"/>
+  <path d="M366 330c0-31 25-56 56-56s56 25 56 56-25 56-56 56-56-25-56-56Z" fill="#c4b5fd"/>
+  <path d="M422 298v35l25 15" fill="none" stroke="#4c1d95" stroke-linecap="round" stroke-linejoin="round" stroke-width="18"/>
+</svg>
