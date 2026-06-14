@@ -2,10 +2,12 @@
 
 import type { OrderStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { ensureShopSeed } from "@/lib/bootstrap";
+import { isDashboardMutationAuthorized } from "@/lib/dashboard-auth";
 import { isDeliveryEnabled, validateDeliveryLocation } from "@/lib/delivery-zone";
-import { parseLocale } from "@/lib/locale";
+import { parseLocale, type Locale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import { sendBookingSms } from "@/lib/sms";
 import {
@@ -35,9 +37,26 @@ const settingsSchema = z.object({
   lang: z.string().optional(),
 });
 
+function unauthorizedMessage(lang: Locale) {
+  return lang === "el"
+    ? "Η ενέργεια απαιτεί έγκυρο dashboard link."
+    : "This action requires a valid dashboard link.";
+}
+
+async function requireDashboardAuth(lang: Locale) {
+  const h = await headers();
+  if (!(await isDashboardMutationAuthorized(h))) {
+    return { ok: false as const, error: unauthorizedMessage(lang) };
+  }
+  return null;
+}
+
 export async function updateOrderStatusFromDashboard(input: z.infer<typeof statusSchema>) {
   const data = statusSchema.parse(input);
   const lang = parseLocale(data.lang);
+
+  const authError = await requireDashboardAuth(lang);
+  if (authError) return authError;
 
   await ensureShopSeed();
 
@@ -98,6 +117,11 @@ export async function updateOrderStatusFromDashboard(input: z.infer<typeof statu
 
 export async function updateShopDeliverySettings(input: z.infer<typeof settingsSchema>) {
   const data = settingsSchema.parse(input);
+  const lang = parseLocale(data.lang);
+
+  const authError = await requireDashboardAuth(lang);
+  if (authError) return authError;
+
   await ensureShopSeed();
 
   const shop = await prisma.shop.findFirst();
@@ -123,7 +147,11 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
   }) };
 }
 
-export async function validateShopDeliveryZone(lat: number, lng: number) {
+export async function validateShopDeliveryZone(lat: number, lng: number, lang?: string) {
+  const locale = parseLocale(lang);
+  const authError = await requireDashboardAuth(locale);
+  if (authError) return authError;
+
   await ensureShopSeed();
   const shop = await prisma.shop.findFirst();
   if (!shop) return { ok: false, error: "no_shop" };

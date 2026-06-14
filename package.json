@@ -8,6 +8,7 @@
     "build": "node scripts/migrate-deploy-retry.mjs && prisma generate && next build",
     "start": "next start -p 3002",
     "lint": "eslint",
+    "security:audit": "node scripts/security-audit.mjs",
     "dashboard:link": "node scripts/create-dashboard-link.mjs"
   },
   "dependencies": {
