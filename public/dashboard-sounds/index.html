@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="el">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard notification sounds</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      section {
+        border: 1px solid #e4e4e7;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+      }
+      h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+      }
+      p {
+        margin: 0 0 0.75rem;
+        color: #52525b;
+        font-size: 0.95rem;
+      }
+      audio {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Ήχοι ειδοποίησης νέας παραγγελίας</h1>
+
+    <section>
+      <h2>Επιλογή 1 — Τρέχων chime (3 νότες C-E-G)</h2>
+      <p>Ήπιος, καθαρός, γρήγορος. Αυτός είναι ενεργός τώρα στο dashboard.</p>
+      <audio controls src="./option-1-current-chime.wav"></audio>
+    </section>
+
+    <section>
+      <h2>Επιλογή 2 — Bright bell (πιο «κουδούνι»)</h2>
+      <p>Πιο δυνατός, πιο ευδιάκριτος σε θόρυβο κουζίνας.</p>
+      <audio controls src="./option-2-bright-bell.wav"></audio>
+    </section>
+
+    <section>
+      <h2>Επιλογή 3 — Soft marimba (4 νότες, πιο μουσικό)</h2>
+      <p>Πιο ήπιος και «μελωδικός», λιγότερο απότομος.</p>
+      <audio controls src="./option-3-soft-marimba.wav"></audio>
+    </section>
+  </body>
+</html>
