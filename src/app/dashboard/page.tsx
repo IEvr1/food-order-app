@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { FulfillmentType, Prisma } from "@prisma/client";
 import { ensureShopSeed } from "@/lib/bootstrap";
 import {
-  customerPhoneSearchWhere,
   parseOrderStatus,
   resolveTodayDashboardDateRange,
   salonLocalDateRangeBoundsUtc,
@@ -26,7 +25,6 @@ export default async function DashboardPage({
   searchParams: Promise<{
     lang?: string;
     status?: string;
-    phone?: string;
     fulfillment?: string;
   }>;
 }) {
@@ -39,10 +37,8 @@ export default async function DashboardPage({
           fromDate: "Από",
           toDate: "Έως",
           status: "Κατάσταση",
-          phone: "Τηλέφωνο",
           fulfillment: "Τύπος",
           all: "Όλα",
-          apply: "Εφαρμογή",
           pickup: "TakeAway",
           delivery: "Delivery",
         }
@@ -50,10 +46,8 @@ export default async function DashboardPage({
           fromDate: "From",
           toDate: "To",
           status: "Status",
-          phone: "Phone",
           fulfillment: "Type",
           all: "All",
-          apply: "Apply",
           pickup: "Pickup",
           delivery: "Delivery",
         };
@@ -121,11 +115,6 @@ export default async function DashboardPage({
 
   if (params.fulfillment === "PICKUP" || params.fulfillment === "DELIVERY") {
     where.fulfillmentType = params.fulfillment as FulfillmentType;
-  }
-
-  const phoneWhere = customerPhoneSearchWhere(params.phone);
-  if (phoneWhere) {
-    where.customer = phoneWhere;
   }
 
   const orders = await prisma.order.findMany({
@@ -201,7 +190,6 @@ export default async function DashboardPage({
             from: "",
             to: "",
             status: params.status ?? "all",
-            phone: params.phone ?? "",
             fulfillment: params.fulfillment ?? "all",
           }}
         />

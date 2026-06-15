@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { FulfillmentType, Prisma } from "@prisma/client";
 import { ensureShopSeed } from "@/lib/bootstrap";
 import {
-  customerPhoneSearchWhere,
   parseOrderStatus,
   resolveHistoryDateRange,
   salonLocalDateRangeBoundsUtc,
@@ -27,7 +26,6 @@ export default async function DashboardHistoryPage({
     from?: string;
     to?: string;
     status?: string;
-    phone?: string;
     fulfillment?: string;
   }>;
 }) {
@@ -40,10 +38,8 @@ export default async function DashboardHistoryPage({
           fromDate: "Από",
           toDate: "Έως",
           status: "Κατάσταση",
-          phone: "Τηλέφωνο",
           fulfillment: "Τύπος",
           all: "Όλα",
-          apply: "Εφαρμογή",
           pickup: "TakeAway",
           delivery: "Delivery",
         }
@@ -51,10 +47,8 @@ export default async function DashboardHistoryPage({
           fromDate: "From",
           toDate: "To",
           status: "Status",
-          phone: "Phone",
           fulfillment: "Type",
           all: "All",
-          apply: "Apply",
           pickup: "Pickup",
           delivery: "Delivery",
         };
@@ -103,11 +97,6 @@ export default async function DashboardHistoryPage({
 
   if (params.fulfillment === "PICKUP" || params.fulfillment === "DELIVERY") {
     where.fulfillmentType = params.fulfillment as FulfillmentType;
-  }
-
-  const phoneWhere = customerPhoneSearchWhere(params.phone);
-  if (phoneWhere) {
-    where.customer = phoneWhere;
   }
 
   const orders = await prisma.order.findMany({
@@ -171,7 +160,6 @@ export default async function DashboardHistoryPage({
             from,
             to,
             status: params.status ?? "all",
-            phone: params.phone ?? "",
             fulfillment: params.fulfillment ?? "all",
           }}
         />

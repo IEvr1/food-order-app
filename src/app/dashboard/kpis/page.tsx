@@ -25,10 +25,8 @@ export default async function KpisPage({
           fromDate: "Από",
           toDate: "Έως",
           status: "Κατάσταση",
-          phone: "Τηλέφωνο",
           fulfillment: "Τύπος",
           all: "Όλα",
-          apply: "Εφαρμογή",
           pickup: "TakeAway",
           delivery: "Delivery",
         }
@@ -36,10 +34,8 @@ export default async function KpisPage({
           fromDate: "From",
           toDate: "To",
           status: "Status",
-          phone: "Phone",
           fulfillment: "Type",
           all: "All",
-          apply: "Apply",
           pickup: "Pickup",
           delivery: "Delivery",
         };
@@ -111,7 +107,6 @@ export default async function KpisPage({
           from,
           to,
           status: "all",
-          phone: "",
           fulfillment: "all",
         }}
       />
