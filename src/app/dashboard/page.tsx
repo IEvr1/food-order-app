@@ -10,6 +10,7 @@ import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang } from "@/lib/timezone";
+import { DashboardAutoRefresh } from "@/app/dashboard/dashboard-auto-refresh";
 import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 import {
   DashboardOrdersView,
@@ -148,6 +149,7 @@ export default async function DashboardPage({
 
   return (
     <div className="min-h-dvh bg-zinc-50">
+      <DashboardAutoRefresh />
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 pr-16">
           <div>

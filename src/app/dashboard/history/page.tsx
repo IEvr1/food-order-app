@@ -10,6 +10,7 @@ import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang, todayIsoInTimeZone } from "@/lib/timezone";
+import { DashboardAutoRefresh } from "@/app/dashboard/dashboard-auto-refresh";
 import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 import {
   DashboardOrdersView,
@@ -130,6 +131,7 @@ export default async function DashboardHistoryPage({
 
   return (
     <div className="min-h-dvh bg-zinc-50">
+      <DashboardAutoRefresh />
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
         <div className="mx-auto max-w-5xl pr-16">
           <Link href={`/dashboard?lang=${lang}`} className="text-sm text-orange-600 underline">
