@@ -6,6 +6,12 @@ import { useTransition } from "react";
 import { updateOrderStatusFromDashboard } from "@/app/dashboard/order-actions";
 import type { Locale } from "@/lib/locale";
 import { orderStatusLabel } from "@/lib/order-status-label";
+import {
+  getNextStatus,
+  isWaitingForDriver,
+  nextActionLabelKey,
+  type ActionStatus,
+} from "@/lib/order-status-flow";
 import { formatPhoneDisplay } from "@/lib/phone";
 
 export type DashboardOrderRow = {
@@ -26,44 +32,6 @@ export type DashboardOrderRow = {
   notes: string | null;
   items: { name: string; quantity: number; lineTotalCents: number }[];
 };
-
-type ActionStatus =
-  | "PREPARING"
-  | "OUT_FOR_DELIVERY"
-  | "COMPLETED"
-  | "CANCELLED";
-
-function getNextStatus(order: DashboardOrderRow): ActionStatus | null {
-  if (order.status === "CANCELLED" || order.status === "COMPLETED") {
-    return null;
-  }
-
-  if (order.fulfillmentType === "DELIVERY") {
-    if (order.status === "CONFIRMED" || order.status === "PENDING") return "PREPARING";
-    if (order.status === "PREPARING" || order.status === "READY") return "OUT_FOR_DELIVERY";
-    if (order.status === "OUT_FOR_DELIVERY") return "COMPLETED";
-    return null;
-  }
-
-  if (order.status === "CONFIRMED" || order.status === "PENDING") return "PREPARING";
-  if (order.status === "PREPARING" || order.status === "READY") return "COMPLETED";
-  return null;
-}
-
-function nextActionLabel(
-  order: DashboardOrderRow,
-  nextStatus: ActionStatus,
-  labels: Record<string, string>,
-): string {
-  if (nextStatus === "PREPARING") return labels.next_PREPARING;
-  if (nextStatus === "OUT_FOR_DELIVERY") return labels.next_OUT_FOR_DELIVERY;
-  if (nextStatus === "COMPLETED") {
-    return order.fulfillmentType === "PICKUP"
-      ? labels.next_ready_pickup
-      : labels.next_COMPLETED;
-  }
-  return nextStatus;
-}
 
 function statusAccent(status: string): string {
   switch (status) {
@@ -146,7 +114,7 @@ function OrderCard({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const nextStatus = getNextStatus(order);
+  const nextStatus = getNextStatus(order, "kitchen");
 
   const setStatus = (status: ActionStatus) => {
     startTransition(async () => {
@@ -171,6 +139,7 @@ function OrderCard({
   const isDelivery = order.fulfillmentType === "DELIVERY";
   const timeLabel = readOnly ? order.requestedAtDisplay : order.requestedTimeDisplay;
   const inactive = isInactiveStatus(order.status);
+  const waitingForDriver = isWaitingForDriver(order);
 
   return (
     <article
@@ -204,6 +173,11 @@ function OrderCard({
             >
               {orderStatusLabel(order.status, lang)}
             </span>
+            {waitingForDriver && (
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800">
+                {labels.onDeliveryBoard}
+              </span>
+            )}
           </div>
           <span className="shrink-0 text-sm font-bold text-zinc-900">{order.totalDisplay}</span>
         </div>
@@ -255,7 +229,7 @@ function OrderCard({
               onClick={() => setStatus(nextStatus)}
               className="min-h-9 flex-1 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {nextActionLabel(order, nextStatus, labels)}
+              {labels[nextActionLabelKey(order, nextStatus)] ?? nextStatus}
             </button>
             <button
               type="button"

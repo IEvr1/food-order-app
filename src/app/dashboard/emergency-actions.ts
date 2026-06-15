@@ -81,6 +81,7 @@ export async function emergencyCancelDayAndNotify(isoDate: string, lang: Locale)
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/delivery");
   revalidatePath("/dashboard/emergency");
 
   return {

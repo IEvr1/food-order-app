@@ -9,6 +9,7 @@ Online food ordering for a single shop (takeaway + delivery), with SMS confirmat
 - SMS order confirmation with manage link (`/l/:code`)
 - Order history (last 4) and cancel while status is CONFIRMED
 - Owner dashboard: live order queue, KPIs, closures, emergency cancel, shop settings
+- Delivery dashboard: driver queue (ready + on the way), separate signed link
 
 ## Setup
 
@@ -49,6 +50,23 @@ npm run dashboard:link
 
 Open `/dashboard?code=...` then configure delivery in **Settings** (shop location + radius km).
 
+### Delivery dashboard
+
+Generate a signed delivery link for drivers:
+
+```bash
+npm run delivery:link
+```
+
+Open `/dashboard/delivery?code=...`. Drivers see only today's delivery orders that are **ready for pickup** or **on the way**. Kitchen marks orders as ready on the owner dashboard; drivers mark **on the way** (SMS to customer) and **done**.
+
+| Dashboard | Delivery flow step |
+|-----------|-------------------|
+| Owner `/dashboard` | PREPARING → **Ready for delivery** (READY) |
+| Driver `/dashboard/delivery` | READY → **On the way** → **Done** |
+
+The delivery link cannot access owner pages (settings, KPIs, etc.). The owner dashboard link can preview `/dashboard/delivery`.
+
 ## Required env (production)
 
 | Variable | Purpose |
@@ -56,7 +74,7 @@ Open `/dashboard?code=...` then configure delivery in **Settings** (shop locatio
 | `DATABASE_URL` | PostgreSQL (`food_order` or hosted DB) |
 | `APP_BASE_URL` | Public URL for SMS links |
 | `SMS_LINK_SECRET` | Signs customer manage links |
-| `DASHBOARD_LINK_SECRET` | Signs owner dashboard links |
+| `DASHBOARD_LINK_SECRET` | Signs owner dashboard and delivery links |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Maps + Places for delivery |
 
 SMS via Twilio and/or `SMS_GATEWAY_URL` + `SMS_GATEWAY_API_KEY`.
@@ -66,6 +84,7 @@ SMS via Twilio and/or `SMS_GATEWAY_URL` + `SMS_GATEWAY_API_KEY`.
 - `/` → `/chat`
 - `/chat` — customer ordering
 - `/dashboard` — owner (signed link)
+- `/dashboard/delivery` — driver queue (separate signed link)
 - `/dashboard/settings` — shop location & delivery radius
 - `/l/:code` — SMS short link
 

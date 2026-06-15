@@ -1,16 +1,20 @@
 import type { NextRequest } from "next/server";
 
 export const DASHBOARD_ACCESS_COOKIE = "dashboard_access";
+export const DELIVERY_ACCESS_COOKIE = "delivery_access";
 
 const DASHBOARD_LINK_PURPOSE = "dashboard";
-const DEFAULT_DASHBOARD_LINK_TTL_SECONDS = 90 * 24 * 60 * 60;
-const MIN_DASHBOARD_LINK_TTL_SECONDS = 60;
-const MAX_DASHBOARD_LINK_TTL_SECONDS = DEFAULT_DASHBOARD_LINK_TTL_SECONDS;
+const DELIVERY_LINK_PURPOSE = "delivery";
+const DEFAULT_LINK_TTL_SECONDS = 90 * 24 * 60 * 60;
+const MIN_LINK_TTL_SECONDS = 60;
+const MAX_LINK_TTL_SECONDS = DEFAULT_LINK_TTL_SECONDS;
 /** Browser-safe cookie lifetime; refreshed on each dashboard visit. */
 export const DASHBOARD_ACCESS_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 
-type DashboardAccessPayload = {
-  purpose: typeof DASHBOARD_LINK_PURPOSE;
+type LinkPurpose = typeof DASHBOARD_LINK_PURPOSE | typeof DELIVERY_LINK_PURPOSE;
+
+type AccessPayload = {
+  purpose: LinkPurpose;
   iat: number;
   nonce: string;
   exp?: number;
@@ -34,9 +38,9 @@ export function isDashboardLinkAuthAvailable(): boolean {
   return Boolean(dashboardLinkSecret());
 }
 
-function normalizeDashboardTtlSeconds(requested?: number): number {
-  const base = requested ?? DEFAULT_DASHBOARD_LINK_TTL_SECONDS;
-  return Math.min(MAX_DASHBOARD_LINK_TTL_SECONDS, Math.max(MIN_DASHBOARD_LINK_TTL_SECONDS, base));
+function normalizeLinkTtlSeconds(requested?: number): number {
+  const base = requested ?? DEFAULT_LINK_TTL_SECONDS;
+  return Math.min(MAX_LINK_TTL_SECONDS, Math.max(MIN_LINK_TTL_SECONDS, base));
 }
 
 function base64UrlEncode(input: string | Uint8Array): string {
@@ -63,7 +67,7 @@ function base64UrlDecodeToString(input: string): string {
   return new TextDecoder().decode(base64UrlDecodeToBytes(input));
 }
 
-async function signDashboardTokenPayload(payloadPart: string, secret: string): Promise<string> {
+async function signTokenPayload(payloadPart: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -86,61 +90,7 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function createDashboardAccessCode(options?: {
-  ttlSeconds?: number;
-}): Promise<{ code: string; expiresAt: Date | null; permanent: boolean }> {
-  const secret = dashboardLinkSecret();
-  if (!secret) {
-    throw new Error("DASHBOARD_LINK_SECRET must be set in production");
-  }
-
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const ttlSeconds =
-    options?.ttlSeconds === undefined ? undefined : normalizeDashboardTtlSeconds(options.ttlSeconds);
-  const permanent = ttlSeconds === undefined;
-  const payload: DashboardAccessPayload = {
-    purpose: DASHBOARD_LINK_PURPOSE,
-    iat: nowSeconds,
-    nonce: crypto.randomUUID(),
-    ...(permanent ? {} : { exp: nowSeconds + ttlSeconds }),
-  };
-  const payloadPart = base64UrlEncode(JSON.stringify(payload));
-  const signature = await signDashboardTokenPayload(payloadPart, secret);
-  return {
-    code: `${payloadPart}.${signature}`,
-    expiresAt: permanent ? null : new Date(payload.exp! * 1000),
-    permanent,
-  };
-}
-
-export async function verifyDashboardAccessCode(code: string | undefined | null): Promise<VerifiedDashboardAccess | null> {
-  const secret = dashboardLinkSecret();
-  const trimmed = code?.trim();
-  if (!secret || !trimmed) {
-    return null;
-  }
-
-  const [payloadPart, signature, extra] = trimmed.split(".");
-  if (!payloadPart || !signature || extra !== undefined) {
-    return null;
-  }
-
-  const expected = await signDashboardTokenPayload(payloadPart, secret);
-  if (!timingSafeEqual(signature, expected)) {
-    return null;
-  }
-
-  let payload: DashboardAccessPayload;
-  try {
-    payload = JSON.parse(base64UrlDecodeToString(payloadPart)) as DashboardAccessPayload;
-  } catch {
-    return null;
-  }
-
-  if (payload.purpose !== DASHBOARD_LINK_PURPOSE) {
-    return null;
-  }
-
+function verifiedFromPayload(payload: AccessPayload): VerifiedDashboardAccess | null {
   if (payload.exp === undefined) {
     return {
       permanent: true,
@@ -165,7 +115,93 @@ export async function verifyDashboardAccessCode(code: string | undefined | null)
   };
 }
 
-export function dashboardAccessCookieOptions(verified: VerifiedDashboardAccess) {
+async function createAccessCode(
+  purpose: LinkPurpose,
+  options?: { ttlSeconds?: number },
+): Promise<{ code: string; expiresAt: Date | null; permanent: boolean }> {
+  const secret = dashboardLinkSecret();
+  if (!secret) {
+    throw new Error("DASHBOARD_LINK_SECRET must be set in production");
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const ttlSeconds =
+    options?.ttlSeconds === undefined ? undefined : normalizeLinkTtlSeconds(options.ttlSeconds);
+  const permanent = ttlSeconds === undefined;
+  const payload: AccessPayload = {
+    purpose,
+    iat: nowSeconds,
+    nonce: crypto.randomUUID(),
+    ...(permanent ? {} : { exp: nowSeconds + ttlSeconds }),
+  };
+  const payloadPart = base64UrlEncode(JSON.stringify(payload));
+  const signature = await signTokenPayload(payloadPart, secret);
+  return {
+    code: `${payloadPart}.${signature}`,
+    expiresAt: permanent ? null : new Date(payload.exp! * 1000),
+    permanent,
+  };
+}
+
+async function verifyAccessCodeForPurpose(
+  code: string | undefined | null,
+  expectedPurpose: LinkPurpose,
+): Promise<VerifiedDashboardAccess | null> {
+  const secret = dashboardLinkSecret();
+  const trimmed = code?.trim();
+  if (!secret || !trimmed) {
+    return null;
+  }
+
+  const [payloadPart, signature, extra] = trimmed.split(".");
+  if (!payloadPart || !signature || extra !== undefined) {
+    return null;
+  }
+
+  const expected = await signTokenPayload(payloadPart, secret);
+  if (!timingSafeEqual(signature, expected)) {
+    return null;
+  }
+
+  let payload: AccessPayload;
+  try {
+    payload = JSON.parse(base64UrlDecodeToString(payloadPart)) as AccessPayload;
+  } catch {
+    return null;
+  }
+
+  if (payload.purpose !== expectedPurpose) {
+    return null;
+  }
+
+  return verifiedFromPayload(payload);
+}
+
+export async function createDashboardAccessCode(options?: {
+  ttlSeconds?: number;
+}): Promise<{ code: string; expiresAt: Date | null; permanent: boolean }> {
+  return createAccessCode(DASHBOARD_LINK_PURPOSE, options);
+}
+
+export async function createDeliveryAccessCode(options?: {
+  ttlSeconds?: number;
+}): Promise<{ code: string; expiresAt: Date | null; permanent: boolean }> {
+  return createAccessCode(DELIVERY_LINK_PURPOSE, options);
+}
+
+export async function verifyDashboardAccessCode(
+  code: string | undefined | null,
+): Promise<VerifiedDashboardAccess | null> {
+  return verifyAccessCodeForPurpose(code, DASHBOARD_LINK_PURPOSE);
+}
+
+export async function verifyDeliveryAccessCode(
+  code: string | undefined | null,
+): Promise<VerifiedDashboardAccess | null> {
+  return verifyAccessCodeForPurpose(code, DELIVERY_LINK_PURPOSE);
+}
+
+export function accessCookieOptions(verified: VerifiedDashboardAccess) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
@@ -173,6 +209,11 @@ export function dashboardAccessCookieOptions(verified: VerifiedDashboardAccess) 
     path: "/",
     maxAge: verified.cookieMaxAgeSeconds,
   };
+}
+
+/** @deprecated Use accessCookieOptions */
+export function dashboardAccessCookieOptions(verified: VerifiedDashboardAccess) {
+  return accessCookieOptions(verified);
 }
 
 function readCookie(cookieHeader: string | null, name: string): string | null {
@@ -193,7 +234,54 @@ export async function isDashboardMutationAuthorized(headers: Headers): Promise<b
   return Boolean(await verifyDashboardAccessCode(code));
 }
 
+export async function isDeliveryMutationAuthorized(headers: Headers): Promise<boolean> {
+  const cookieHeader = headers.get("cookie");
+  const deliveryCode = readCookie(cookieHeader, DELIVERY_ACCESS_COOKIE);
+  if (await verifyDeliveryAccessCode(deliveryCode)) {
+    return true;
+  }
+  const dashboardCode = readCookie(cookieHeader, DASHBOARD_ACCESS_COOKIE);
+  return Boolean(await verifyDashboardAccessCode(dashboardCode));
+}
+
 export async function isDashboardPageAuthorized(request: NextRequest): Promise<boolean> {
   const code = request.cookies.get(DASHBOARD_ACCESS_COOKIE)?.value;
   return Boolean(await verifyDashboardAccessCode(code));
+}
+
+export async function isDeliveryPageAuthorized(request: NextRequest): Promise<boolean> {
+  const deliveryCode = request.cookies.get(DELIVERY_ACCESS_COOKIE)?.value;
+  if (await verifyDeliveryAccessCode(deliveryCode)) {
+    return true;
+  }
+  const dashboardCode = request.cookies.get(DASHBOARD_ACCESS_COOKIE)?.value;
+  return Boolean(await verifyDashboardAccessCode(dashboardCode));
+}
+
+export type ResolvedLinkAccess = {
+  purpose: LinkPurpose;
+  verified: VerifiedDashboardAccess;
+  code: string;
+};
+
+/** Resolve a signed `code` query param to dashboard or delivery access. */
+export async function resolveLinkAccessCode(
+  code: string | undefined | null,
+): Promise<ResolvedLinkAccess | null> {
+  const trimmed = code?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const dashboardVerified = await verifyDashboardAccessCode(trimmed);
+  if (dashboardVerified) {
+    return { purpose: DASHBOARD_LINK_PURPOSE, verified: dashboardVerified, code: trimmed };
+  }
+
+  const deliveryVerified = await verifyDeliveryAccessCode(trimmed);
+  if (deliveryVerified) {
+    return { purpose: DELIVERY_LINK_PURPOSE, verified: deliveryVerified, code: trimmed };
+  }
+
+  return null;
 }

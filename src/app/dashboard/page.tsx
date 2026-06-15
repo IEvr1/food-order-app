@@ -71,9 +71,12 @@ export default async function DashboardPage({
           cancelConfirm: "Ακύρωση παραγγελίας #{n}; Θα σταλεί SMS στον πελάτη.",
           moreItems: "ακόμα",
           next_PREPARING: "Προετοιμασία",
+          next_READY_delivery: "Έτοιμη για delivery",
           next_ready_pickup: "Έτοιμη",
           next_OUT_FOR_DELIVERY: "Στο δρόμο",
           next_COMPLETED: "Ολοκληρώθηκε",
+          onDeliveryBoard: "Στο delivery board",
+          deliveryBoard: "Delivery",
           filters: filterLabels,
         }
       : {
@@ -91,9 +94,12 @@ export default async function DashboardPage({
           cancelConfirm: "Cancel order #{n}? An SMS will be sent to the customer.",
           moreItems: "more",
           next_PREPARING: "Prepare",
+          next_READY_delivery: "Ready for delivery",
           next_ready_pickup: "Ready",
           next_OUT_FOR_DELIVERY: "On the way",
           next_COMPLETED: "Done",
+          onDeliveryBoard: "On delivery board",
+          deliveryBoard: "Delivery",
           filters: filterLabels,
         };
 
@@ -181,6 +187,9 @@ export default async function DashboardPage({
             <Link href={`/dashboard/closures?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
               {t.closures}
             </Link>
+            <Link href={`/dashboard/delivery?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
+              {t.deliveryBoard}
+            </Link>
           </nav>
         </div>
       </header>
@@ -218,9 +227,11 @@ export default async function DashboardPage({
             cancelConfirm: t.cancelConfirm,
             moreItems: t.moreItems,
             next_PREPARING: t.next_PREPARING,
+            next_READY_delivery: t.next_READY_delivery,
             next_ready_pickup: t.next_ready_pickup,
             next_OUT_FOR_DELIVERY: t.next_OUT_FOR_DELIVERY,
             next_COMPLETED: t.next_COMPLETED,
+            onDeliveryBoard: t.onDeliveryBoard,
           }}
         />
       </main>

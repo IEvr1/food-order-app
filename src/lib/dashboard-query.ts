@@ -182,6 +182,19 @@ export function customerPhoneSearchWhere(
   }
 }
 
+export function deliveryQueueWhere(
+  shopId: string,
+  start: Date,
+  endExclusive: Date,
+): Prisma.OrderWhereInput {
+  return {
+    shopId,
+    fulfillmentType: "DELIVERY",
+    status: { in: ["READY", "OUT_FOR_DELIVERY"] },
+    requestedAt: { gte: start, lt: endExclusive },
+  };
+}
+
 export function parseOrderStatus(value: string | undefined): OrderStatus | undefined {
   if (!value || value === "all") {
     return undefined;

@@ -10,6 +10,7 @@
     "lint": "eslint",
     "security:audit": "node scripts/security-audit.mjs",
     "dashboard:link": "node scripts/create-dashboard-link.mjs",
+    "delivery:link": "node scripts/create-delivery-link.mjs",
     "seed:test-orders": "node scripts/seed-test-orders.mjs"
   },
   "dependencies": {

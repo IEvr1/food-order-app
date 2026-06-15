@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { ensureShopSeed } from "@/lib/bootstrap";
-import { isDashboardMutationAuthorized } from "@/lib/dashboard-auth";
+import {
+  isDashboardMutationAuthorized,
+  isDeliveryMutationAuthorized,
+} from "@/lib/dashboard-auth";
 import { isDeliveryEnabled, validateDeliveryLocation } from "@/lib/delivery-zone";
 import { parseLocale, type Locale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +16,7 @@ import {
   buildOrderStatusSms,
   messageKindFromStatusTransition,
 } from "@/lib/order-messages";
+import { canTransition, type DashboardScope } from "@/lib/order-status-flow";
 import { sendBookingSms } from "@/lib/sms";
 import { createSmsManageUrl } from "@/lib/sms-templates";
 
@@ -69,28 +73,61 @@ async function requireDashboardAuth(lang: Locale) {
   return null;
 }
 
-export async function updateOrderStatusFromDashboard(input: z.infer<typeof statusSchema>) {
-  const data = statusSchema.parse(input);
-  const lang = parseLocale(data.lang);
+function deliveryUnauthorizedMessage(lang: Locale) {
+  return lang === "el"
+    ? "Η ενέργεια απαιτεί έγκυρο delivery link."
+    : "This action requires a valid delivery link.";
+}
 
-  const authError = await requireDashboardAuth(lang);
-  if (authError) return authError;
+async function requireDeliveryAuth(lang: Locale) {
+  const h = await headers();
+  if (!(await isDeliveryMutationAuthorized(h))) {
+    return { ok: false as const, error: deliveryUnauthorizedMessage(lang) };
+  }
+  return null;
+}
 
+function invalidTransitionMessage(lang: Locale) {
+  return lang === "el" ? "Μη έγκυρη αλλαγή κατάστασης." : "Invalid status transition.";
+}
+
+function revalidateOrderPaths() {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/delivery");
+  revalidatePath("/dashboard/history");
+}
+
+async function applyOrderStatusUpdate(
+  orderId: string,
+  newStatus: OrderStatus,
+  lang: Locale,
+  scope: DashboardScope,
+) {
   await ensureShopSeed();
 
   const order = await prisma.order.findUnique({
-    where: { id: data.orderId },
+    where: { id: orderId },
     include: { customer: true, shop: true },
   });
   if (!order) {
     return { ok: false as const, error: "not_found" };
   }
 
-  const newStatus = data.status as OrderStatus;
   if (order.status === newStatus) {
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/history");
+    revalidateOrderPaths();
     return { ok: true as const };
+  }
+
+  const isCancel = newStatus === "CANCELLED";
+  if (isCancel) {
+    if (scope !== "kitchen") {
+      return { ok: false as const, error: invalidTransitionMessage(lang) };
+    }
+    if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+      return { ok: false as const, error: invalidTransitionMessage(lang) };
+    }
+  } else if (!canTransition(order.status, newStatus, order.fulfillmentType, scope)) {
+    return { ok: false as const, error: invalidTransitionMessage(lang) };
   }
 
   await prisma.order.update({
@@ -126,9 +163,32 @@ export async function updateOrderStatusFromDashboard(input: z.infer<typeof statu
     }
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/history");
+  revalidateOrderPaths();
   return { ok: true as const };
+}
+
+export async function updateOrderStatusFromDashboard(input: z.infer<typeof statusSchema>) {
+  const data = statusSchema.parse(input);
+  const lang = parseLocale(data.lang);
+
+  const authError = await requireDashboardAuth(lang);
+  if (authError) return authError;
+
+  return applyOrderStatusUpdate(data.orderId, data.status as OrderStatus, lang, "kitchen");
+}
+
+export async function updateOrderStatusFromDelivery(input: z.infer<typeof statusSchema>) {
+  const data = statusSchema.parse(input);
+  const lang = parseLocale(data.lang);
+
+  const authError = await requireDeliveryAuth(lang);
+  if (authError) return authError;
+
+  if (data.status === "CANCELLED") {
+    return { ok: false as const, error: invalidTransitionMessage(lang) };
+  }
+
+  return applyOrderStatusUpdate(data.orderId, data.status as OrderStatus, lang, "delivery");
 }
 
 export async function updateShopPrepTimes(input: z.infer<typeof prepTimesSchema>) {
