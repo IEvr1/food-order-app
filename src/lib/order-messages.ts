@@ -26,6 +26,9 @@ type StatusSmsBase = {
 /**
  * Pick SMS kind after a dashboard status change.
  * ORDER_RECEIVED is sent at order creation; ORDER_UPDATED on item edits.
+ *
+ * PREPARING is kitchen-only (no customer SMS) — confirmation at order placement
+ * already implies prep is underway.
  */
 export function messageKindFromStatusTransition(
   newStatus: OrderStatus,
@@ -43,6 +46,10 @@ export function messageKindFromStatusTransition(
       return "ORDER_ON_THE_WAY";
     case "CANCELLED":
       return "ORDER_CANCELLED";
+    case "PREPARING":
+    case "CONFIRMED":
+    case "PENDING":
+      return null;
     default:
       return null;
   }
