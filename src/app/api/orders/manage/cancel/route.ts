@@ -3,12 +3,9 @@ import { getManageSessionPayload } from "@/lib/manage-from-request";
 import { canCustomerManageOrder } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
+import { buildOrderStatusSms } from "@/lib/order-messages";
 import { sendBookingSms } from "@/lib/sms";
-import {
-  buildOrderCancelledSms,
-  createSmsManageUrl,
-  smsWhenFromInstant,
-} from "@/lib/sms-templates";
+import { createSmsManageUrl, smsWhenFromInstant } from "@/lib/sms-templates";
 
 export async function POST(request: Request) {
   const lang = parseLocale(new URL(request.url).searchParams.get("lang"));
@@ -45,7 +42,7 @@ export async function POST(request: Request) {
   });
 
   const when = smsWhenFromInstant(order.requestedAt, order.shop.timezone, lang);
-  const message = buildOrderCancelledSms({
+  const message = buildOrderStatusSms("ORDER_CANCELLED", {
     shopName: order.shop.name,
     orderNumber: order.orderNumber,
     manageUrl,
@@ -53,10 +50,12 @@ export async function POST(request: Request) {
     when,
   });
 
-  try {
-    await sendBookingSms({ phoneE164: order.customer.phoneE164, body: message });
-  } catch (error) {
-    console.error("Cancel SMS failed", error);
+  if (message) {
+    try {
+      await sendBookingSms({ phoneE164: order.customer.phoneE164, body: message });
+    } catch (error) {
+      console.error("Cancel SMS failed", error);
+    }
   }
 
   return NextResponse.json({ ok: true });

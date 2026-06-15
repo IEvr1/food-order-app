@@ -35,6 +35,8 @@ export async function GET() {
       latitude: shop.latitude,
       longitude: shop.longitude,
       deliveryRadiusMeters: shop.deliveryRadiusMeters,
+      prepMinutes: shop.prepMinutes,
+      deliveryPrepMinutes: shop.deliveryPrepMinutes,
     },
     categories: shop.categories.map((c) => ({
       id: c.id,

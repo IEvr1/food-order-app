@@ -6,12 +6,9 @@ import { z } from "zod";
 import type { Locale } from "@/lib/locale";
 import { isDashboardMutationAuthorized } from "@/lib/dashboard-auth";
 import { prisma } from "@/lib/prisma";
+import { buildOrderStatusSms } from "@/lib/order-messages";
 import { sendBookingSms } from "@/lib/sms";
-import {
-  buildOrderCancelledSms,
-  createSmsManageUrl,
-  resolveOrderLocale,
-} from "@/lib/sms-templates";
+import { createSmsManageUrl, resolveOrderLocale } from "@/lib/sms-templates";
 import { salonLocalDayBoundsUtc } from "@/lib/timezone";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -67,12 +64,14 @@ export async function emergencyCancelDayAndNotify(isoDate: string, lang: Locale)
       phoneE164: order.customer.phoneE164,
       orderId: order.id,
     });
-    const message = buildOrderCancelledSms({
+    const message = buildOrderStatusSms("ORDER_CANCELLED", {
       shopName: shop.name,
       orderNumber: order.orderNumber,
       manageUrl,
       lang: orderLang,
     });
+
+    if (!message) continue;
 
     try {
       await sendBookingSms({ phoneE164: order.customer.phoneE164, body: message });

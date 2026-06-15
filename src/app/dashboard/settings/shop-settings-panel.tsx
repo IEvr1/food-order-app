@@ -21,12 +21,18 @@ export function ShopSettingsPanel({
     latitude: number | null;
     longitude: number | null;
     deliveryRadiusMeters: number;
+    prepMinutes: number;
+    deliveryPrepMinutes: number;
   };
 }) {
   const t =
     lang === "el"
       ? {
           title: "Ρυθμίσεις καταστήματος",
+          prepSection: "Χρόνοι εκτίμησης",
+          prepPickup: "Παραλαβή (λεπτά)",
+          prepDelivery: "Delivery (λεπτά)",
+          prepHint: "Εμφανίζονται στον πελάτη κατά την παραγγελία.",
           location: "Θέση καταστήματος",
           radius: "Ακτίνα delivery (km)",
           save: "Αποθήκευση",
@@ -36,6 +42,10 @@ export function ShopSettingsPanel({
         }
       : {
           title: "Shop settings",
+          prepSection: "Estimated times",
+          prepPickup: "Pickup (minutes)",
+          prepDelivery: "Delivery (minutes)",
+          prepHint: "Shown to customers when ordering.",
           location: "Shop location",
           radius: "Delivery radius (km)",
           save: "Save",
@@ -50,6 +60,8 @@ export function ShopSettingsPanel({
   const [lat, setLat] = useState(defaultLat);
   const [lng, setLng] = useState(defaultLng);
   const [radiusKm, setRadiusKm] = useState((shop.deliveryRadiusMeters / 1000) || 3);
+  const [prepMinutes, setPrepMinutes] = useState(shop.prepMinutes);
+  const [deliveryPrepMinutes, setDeliveryPrepMinutes] = useState(shop.deliveryPrepMinutes);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -59,6 +71,8 @@ export function ShopSettingsPanel({
         latitude: lat,
         longitude: lng,
         deliveryRadiusKm: radiusKm,
+        prepMinutes,
+        deliveryPrepMinutes,
         lang,
       });
       setMessage(result.ok ? t.saved : "Error");
@@ -72,7 +86,39 @@ export function ShopSettingsPanel({
       </Link>
       <h1 className="mt-4 text-2xl font-bold">{t.title}</h1>
       <p className="mt-1 text-sm text-zinc-600">{shop.name}</p>
-      <p className="mt-4 text-sm text-zinc-600">{t.hint}</p>
+
+      <section className="mt-6 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
+        <h2 className="text-sm font-semibold text-zinc-900">{t.prepSection}</h2>
+        <p className="mt-1 text-xs text-zinc-500">{t.prepHint}</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm font-medium">
+            {t.prepPickup}
+            <input
+              type="number"
+              min={5}
+              max={180}
+              step={1}
+              value={prepMinutes}
+              onChange={(e) => setPrepMinutes(Number(e.target.value))}
+              className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
+            />
+          </label>
+          <label className="block text-sm font-medium">
+            {t.prepDelivery}
+            <input
+              type="number"
+              min={5}
+              max={180}
+              step={1}
+              value={deliveryPrepMinutes}
+              onChange={(e) => setDeliveryPrepMinutes(Number(e.target.value))}
+              className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
+            />
+          </label>
+        </div>
+      </section>
+
+      <p className="mt-6 text-sm text-zinc-600">{t.hint}</p>
 
       <label className="mt-4 block text-sm font-medium">
         {t.radius}

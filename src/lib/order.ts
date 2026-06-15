@@ -11,8 +11,22 @@ import {
   zonedWallTimeToUtc,
 } from "@/lib/timezone";
 
-export const PREP_BUFFER_MINUTES = 25;
+export const DEFAULT_PREP_BUFFER_MINUTES = 25;
+export const DEFAULT_DELIVERY_PREP_BUFFER_MINUTES = 45;
+/** @deprecated Use shop.prepMinutes or prepBufferMinutes(shop, type) */
+export const PREP_BUFFER_MINUTES = DEFAULT_PREP_BUFFER_MINUTES;
+/** @deprecated Use shop.deliveryPrepMinutes or prepBufferMinutes(shop, type) */
+export const DELIVERY_PREP_BUFFER_MINUTES = DEFAULT_DELIVERY_PREP_BUFFER_MINUTES;
 export const SLOT_INTERVAL_MINUTES = 15;
+
+export type ShopPrepTimes = Pick<Shop, "prepMinutes" | "deliveryPrepMinutes">;
+
+export function prepBufferMinutes(
+  shop: ShopPrepTimes,
+  fulfillmentType: "PICKUP" | "DELIVERY",
+): number {
+  return fulfillmentType === "DELIVERY" ? shop.deliveryPrepMinutes : shop.prepMinutes;
+}
 
 export type CartLineInput = {
   menuItemId: string;
@@ -82,12 +96,14 @@ export async function getNextOrderNumber(shopId: string, orderDate: string): Pro
 export type SlotOption = { iso: string; label: string };
 
 export async function listOrderTimeSlots(params: {
-  shop: Pick<Shop, "id" | "timezone">;
+  shop: Pick<Shop, "id" | "timezone" | "prepMinutes" | "deliveryPrepMinutes">;
   dateIso: string;
+  fulfillmentType?: "PICKUP" | "DELIVERY";
   now?: Date;
 }): Promise<SlotOption[]> {
   const { shop, dateIso } = params;
   const now = params.now ?? new Date();
+  const prepMinutes = prepBufferMinutes(shop, params.fulfillmentType ?? "PICKUP");
   const timeZone = shop.timezone;
 
   if (await isShopClosedOnLocalDate(shop.id, dateIso)) {
@@ -112,7 +128,7 @@ export async function listOrderTimeSlots(params: {
         continue;
       }
       const slotStart = zonedWallTimeToUtc(dateIso, hour, minute, 0, timeZone);
-      const earliest = addMinutes(now, PREP_BUFFER_MINUTES);
+      const earliest = addMinutes(now, prepMinutes);
       if (dateIso === todayIso && slotStart < earliest) {
         continue;
       }
@@ -132,6 +148,62 @@ export async function listOrderTimeSlots(params: {
   }
 
   return slots;
+}
+
+function salonLocalMinutesSinceMidnight(instant: Date, timeZone: string): number {
+  const hour = hourInTimeZone(instant, timeZone);
+  const minute = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone, minute: "2-digit" })
+      .formatToParts(instant)
+      .find((p) => p.type === "minute")?.value ?? 0,
+  );
+  return hour * 60 + minute;
+}
+
+export type RequestedAtValidationError = "SHOP_CLOSED" | "OUTSIDE_HOURS" | "TOO_SOON" | "PAST";
+
+export async function validateRequestedAtTime(params: {
+  shop: Pick<Shop, "id" | "timezone" | "prepMinutes" | "deliveryPrepMinutes">;
+  requestedAt: Date;
+  fulfillmentType?: "PICKUP" | "DELIVERY";
+  now?: Date;
+}): Promise<{ ok: true } | { ok: false; error: RequestedAtValidationError }> {
+  const { shop, requestedAt } = params;
+  const now = params.now ?? new Date();
+  const prepMinutes = prepBufferMinutes(shop, params.fulfillmentType ?? "PICKUP");
+  const timeZone = shop.timezone;
+  const localDate = isoDateInTimeZone(requestedAt, timeZone);
+
+  if (await isShopClosedOnLocalDate(shop.id, localDate)) {
+    return { ok: false, error: "SHOP_CLOSED" };
+  }
+
+  if (requestedAt < now) {
+    return { ok: false, error: "PAST" };
+  }
+
+  const todayIso = todayIsoInTimeZone(timeZone, now);
+  const earliest = addMinutes(now, prepMinutes);
+  if (localDate === todayIso && requestedAt < earliest) {
+    return { ok: false, error: "TOO_SOON" };
+  }
+
+  const weekday = weekdayInTimeZone(localDate, timeZone);
+  const hours = await prisma.shopHours.findFirst({
+    where: { shopId: shop.id, weekday },
+  });
+  if (!hours) {
+    return { ok: false, error: "OUTSIDE_HOURS" };
+  }
+
+  const requestMinutes = salonLocalMinutesSinceMidnight(requestedAt, timeZone);
+  const startMinutes = hours.startHour * 60;
+  const endMinutes = hours.endHour * 60;
+  if (requestMinutes < startMinutes || requestMinutes >= endMinutes) {
+    return { ok: false, error: "OUTSIDE_HOURS" };
+  }
+
+  return { ok: true };
 }
 
 export function canCustomerManageOrder(status: string): boolean {

@@ -7,6 +7,7 @@ import {
   type DeliveryLocation,
 } from "@/app/chat/delivery-location-picker";
 import { formatPriceEuros } from "@/lib/order";
+import { calculateRestaurantOrderVat, formatVatLabel } from "@/lib/vat";
 import { normalizePhone } from "@/lib/phone";
 import { parseLocale, type Locale } from "@/lib/locale";
 
@@ -31,11 +32,11 @@ type ShopInfo = {
   latitude: number | null;
   longitude: number | null;
   deliveryRadiusMeters: number;
+  prepMinutes: number;
+  deliveryPrepMinutes: number;
 };
 
 type CartLine = { menuItemId: string; name: string; priceCents: number; quantity: number };
-
-type SlotOption = { iso: string; label: string };
 
 type OrderSummaryItem = {
   name: string;
@@ -89,8 +90,13 @@ export default function ChatPage() {
           emptyCart: "Το καλάθι είναι άδειο.",
           pickup: "Παραλαβή",
           delivery: "Delivery",
-          pickTime: "Επιλέξτε ώρα",
-          noSlots: "Δεν υπάρχουν διαθέσιμες ώρες.",
+          scheduled: "Προγραμματισμένη παραγγελία",
+          pickDate: "Ημερομηνία",
+          pickTime: "Ώρα",
+          prepEstimate: (minutes: number) =>
+            `Εκτιμώμενος χρόνος ετοιμασίας: ~${minutes} λεπτά`,
+          prepEstimateDelivery: (minutes: number) =>
+            `Εκτιμώμενος χρόνος παράδοσης: ~${minutes} λεπτά`,
           namePh: "Ονοματεπώνυμο",
           phonePh: "Κινητό (8 ψηφία)",
           notesPh: "Σημειώσεις (π.χ. χωρίς κρεμμύδι)",
@@ -99,6 +105,7 @@ export default function ChatPage() {
           success: "Η παραγγελία ολοκληρώθηκε!",
           orderNum: "Αριθμός",
           total: "Σύνολο",
+          subtotalExVat: "Υποσύνολο (χωρίς ΦΠΑ)",
           newOrder: "Νέα παραγγελία",
           manageTitle: "Η παραγγελία σας",
           cancel: "Ακύρωση παραγγελίας",
@@ -123,8 +130,11 @@ export default function ChatPage() {
           emptyCart: "Your cart is empty.",
           pickup: "Pickup",
           delivery: "Delivery",
-          pickTime: "Pick a time",
-          noSlots: "No available times.",
+          scheduled: "Scheduled order",
+          pickDate: "Date",
+          pickTime: "Time",
+          prepEstimate: (minutes: number) => `Estimated preparation time: ~${minutes} min`,
+          prepEstimateDelivery: (minutes: number) => `Estimated delivery time: ~${minutes} min`,
           namePh: "Full name",
           phonePh: "Mobile (8 digits)",
           notesPh: "Notes (e.g. no onion)",
@@ -133,6 +143,7 @@ export default function ChatPage() {
           success: "Order placed!",
           orderNum: "Number",
           total: "Total",
+          subtotalExVat: "Subtotal (excl. VAT)",
           newOrder: "New order",
           manageTitle: "Your order",
           cancel: "Cancel order",
@@ -158,20 +169,36 @@ export default function ChatPage() {
   const [step, setStep] = useState<Step>("menu");
   const [fulfillment, setFulfillment] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const [deliveryLocation, setDeliveryLocation] = useState<DeliveryLocation | null>(null);
-  const [dateIso, setDateIso] = useState("");
-  const [slots, setSlots] = useState<SlotOption[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [todayIso, setTodayIso] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successOrder, setSuccessOrder] = useState<{ number: number; totalCents: number } | null>(
-    null,
-  );
+  const [successOrder, setSuccessOrder] = useState<{
+    number: number;
+    totalCents: number;
+    isScheduled: boolean;
+  } | null>(null);
   const [manage, setManage] = useState<ManageSummary | null>(null);
 
   const localeTag = locale === "el" ? "el-GR" : "en-US";
+
+  const checkoutVat = useMemo(
+    () =>
+      calculateRestaurantOrderVat(
+        cart.map((line) => ({ lineTotalCents: line.priceCents * line.quantity })),
+      ),
+    [cart],
+  );
+
+  const estimateMinutes = useMemo(() => {
+    if (!shop) return null;
+    return fulfillment === "DELIVERY" ? shop.deliveryPrepMinutes : shop.prepMinutes;
+  }, [shop, fulfillment]);
 
   const loadMenu = useCallback(async () => {
     const res = await fetch("/api/menu");
@@ -202,22 +229,12 @@ export default function ChatPage() {
   }, [loadMenu, loadManage]);
 
   useEffect(() => {
-    if (!dateIso) return;
-    void fetch(`/api/orders/availability?date=${dateIso}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setSlots(d.slots ?? []);
-        if (d.today && !dateIso) setDateIso(d.today);
-      });
-  }, [dateIso]);
-
-  useEffect(() => {
-    if (step === "checkout" && shop && !dateIso) {
+    if (step === "checkout" && shop && !todayIso) {
       void fetch("/api/orders/availability?date=" + new Date().toISOString().slice(0, 10))
         .then((r) => r.json())
-        .then((d) => setDateIso(d.today ?? new Date().toISOString().slice(0, 10)));
+        .then((d) => setTodayIso(d.today ?? new Date().toISOString().slice(0, 10)));
     }
-  }, [step, shop, dateIso]);
+  }, [step, shop, todayIso]);
 
   const activeCategory = useMemo(
     () => categories.find((c) => c.id === activeCategoryId) ?? categories[0],
@@ -263,7 +280,9 @@ export default function ChatPage() {
       body: JSON.stringify({
         items: cart.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity })),
         fulfillmentType: fulfillment,
-        requestedAt: selectedSlot,
+        timing: isScheduled ? "SCHEDULED" : "ASAP",
+        scheduledDate: isScheduled ? scheduleDate : undefined,
+        scheduledTime: isScheduled ? scheduleTime : undefined,
         name,
         phone,
         notes: notes || undefined,
@@ -282,7 +301,11 @@ export default function ChatPage() {
       return;
     }
 
-    setSuccessOrder({ number: data.orderNumber, totalCents: data.totalCents });
+    setSuccessOrder({
+      number: data.orderNumber,
+      totalCents: data.totalCents,
+      isScheduled,
+    });
     setCart([]);
     setStep("success");
     setLoading(false);
@@ -407,9 +430,22 @@ export default function ChatPage() {
                 </div>
               </div>
             ))}
-            <p className="text-right font-bold">
-              {t.total}: {formatPriceEuros(cartTotal(cart), localeTag)}
-            </p>
+            <div className="rounded-xl bg-zinc-50 p-3 text-sm ring-1 ring-zinc-200">
+              <div className="flex justify-between text-zinc-600">
+                <span>{t.subtotalExVat}</span>
+                <span>{formatPriceEuros(checkoutVat.netCents, localeTag)}</span>
+              </div>
+              {checkoutVat.groups.map((group) => (
+                <div key={group.rateBps} className="flex justify-between text-zinc-600">
+                  <span>{formatVatLabel(group.rateBps, locale)}</span>
+                  <span>{formatPriceEuros(group.vatCents, localeTag)}</span>
+                </div>
+              ))}
+              <div className="mt-2 flex justify-between border-t border-zinc-200 pt-2 font-bold text-zinc-900">
+                <span>{t.total}</span>
+                <span>{formatPriceEuros(checkoutVat.grossCents, localeTag)}</span>
+              </div>
+            </div>
 
             <div className="flex gap-2">
               <button
@@ -432,6 +468,14 @@ export default function ChatPage() {
               <p className="text-xs text-amber-700">{t.deliveryDisabled}</p>
             )}
 
+            {!isScheduled && estimateMinutes != null && (
+              <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-900 ring-1 ring-orange-100">
+                {fulfillment === "DELIVERY"
+                  ? t.prepEstimateDelivery(estimateMinutes)
+                  : t.prepEstimate(estimateMinutes)}
+              </p>
+            )}
+
             {fulfillment === "DELIVERY" && shop?.latitude != null && shop.longitude != null && (
               <DeliveryLocationPicker
                 locale={locale}
@@ -444,29 +488,46 @@ export default function ChatPage() {
             )}
 
             <div>
-              <label className="mb-1 block text-sm font-medium">{t.pickTime}</label>
-              <input
-                type="date"
-                value={dateIso}
-                onChange={(e) => {
-                  setDateIso(e.target.value);
-                  setSelectedSlot(null);
-                }}
-                className="mb-2 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-              />
-              <div className="flex flex-wrap gap-2">
-                {slots.length === 0 && <p className="text-sm text-zinc-500">{t.noSlots}</p>}
-                {slots.map((s) => (
-                  <button
-                    key={s.iso}
-                    type="button"
-                    onClick={() => setSelectedSlot(s.iso)}
-                    className={`rounded-lg px-3 py-2 text-sm ${selectedSlot === s.iso ? "bg-orange-600 text-white" : "bg-white ring-1 ring-zinc-200"}`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-3 ring-1 ring-zinc-200">
+                <input
+                  type="checkbox"
+                  checked={isScheduled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsScheduled(checked);
+                    if (!checked) {
+                      setScheduleDate("");
+                      setScheduleTime("");
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-zinc-300 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-sm font-medium text-zinc-800">{t.scheduled}</span>
+              </label>
+
+              {isScheduled && (
+                <div className="mt-2 space-y-2 rounded-xl bg-orange-50/50 p-3 ring-1 ring-orange-100">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">{t.pickDate}</label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      min={todayIso || undefined}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">{t.pickTime}</label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <input
@@ -495,7 +556,7 @@ export default function ChatPage() {
               type="button"
               disabled={
                 loading ||
-                !selectedSlot ||
+                (isScheduled && (!scheduleDate || !scheduleTime)) ||
                 cart.length === 0 ||
                 (fulfillment === "DELIVERY" && !deliveryLocation)
               }
@@ -520,6 +581,13 @@ export default function ChatPage() {
             <p className="font-semibold text-orange-600">
               {formatPriceEuros(successOrder.totalCents, localeTag)}
             </p>
+            {!successOrder.isScheduled && estimateMinutes != null && (
+              <p className="mt-3 text-sm text-zinc-600">
+                {fulfillment === "DELIVERY"
+                  ? t.prepEstimateDelivery(estimateMinutes)
+                  : t.prepEstimate(estimateMinutes)}
+              </p>
+            )}
             <p className="mt-4 text-sm text-zinc-500">
               {locale === "el" ? "Θα λάβετε SMS επιβεβαίωσης." : "You will receive a confirmation SMS."}
             </p>

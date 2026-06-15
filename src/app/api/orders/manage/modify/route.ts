@@ -5,34 +5,47 @@ import { getManageSessionPayload } from "@/lib/manage-from-request";
 import { validateDeliveryLocation } from "@/lib/delivery-zone";
 import {
   canCustomerManageOrder,
-  listOrderTimeSlots,
   resolveCartLines,
+  validateRequestedAtTime,
 } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { isShopClosedOnLocalDate } from "@/lib/shop-closure";
 import { sendBookingSms } from "@/lib/sms";
 import { buildOrderModifiedSms, createSmsManageUrl } from "@/lib/sms-templates";
-import { isoDateInTimeZone } from "@/lib/timezone";
+import { zonedWallTimeToUtc } from "@/lib/timezone";
 
 const cartLineSchema = z.object({
   menuItemId: z.string(),
   quantity: z.number().int().min(1).max(99),
 });
 
-const modifySchema = z.object({
-  items: z.array(cartLineSchema).min(1),
-  fulfillmentType: z.enum(["PICKUP", "DELIVERY"]),
-  requestedAt: z
-    .string()
-    .refine((s) => !Number.isNaN(new Date(s).getTime()))
-    .transform((s) => new Date(s)),
-  notes: z.string().max(500).optional(),
-  deliveryAddress: z.string().max(500).optional(),
-  deliveryLat: z.number().optional(),
-  deliveryLng: z.number().optional(),
-  deliveryPlaceId: z.string().optional(),
-});
+const modifySchema = z
+  .object({
+    items: z.array(cartLineSchema).min(1),
+    fulfillmentType: z.enum(["PICKUP", "DELIVERY"]),
+    timing: z.enum(["ASAP", "SCHEDULED"]).default("ASAP"),
+    scheduledDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    scheduledTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/)
+      .optional(),
+    notes: z.string().max(500).optional(),
+    deliveryAddress: z.string().max(500).optional(),
+    deliveryLat: z.number().optional(),
+    deliveryLng: z.number().optional(),
+    deliveryPlaceId: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.timing === "SCHEDULED" && (!data.scheduledDate || !data.scheduledTime)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "scheduledDate and scheduledTime required for scheduled orders",
+      });
+    }
+  });
 
 export async function POST(request: Request) {
   const lang = parseLocale(new URL(request.url).searchParams.get("lang"));
@@ -66,14 +79,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid cart" }, { status: 400 });
   }
 
-  const localDate = isoDateInTimeZone(payload.requestedAt, order.shop.timezone);
-  if (await isShopClosedOnLocalDate(order.shopId, localDate)) {
-    return NextResponse.json({ error: "Shop closed" }, { status: 409 });
+  let requestedAt: Date;
+  if (payload.timing === "ASAP") {
+    requestedAt = new Date();
+  } else {
+    const [hour, minute] = payload.scheduledTime!.split(":").map(Number);
+    requestedAt = zonedWallTimeToUtc(
+      payload.scheduledDate!,
+      hour,
+      minute,
+      0,
+      order.shop.timezone,
+    );
   }
 
-  const slots = await listOrderTimeSlots({ shop: order.shop, dateIso: localDate });
-  if (!slots.some((s) => s.iso === payload.requestedAt.toISOString())) {
-    return NextResponse.json({ error: "Slot unavailable", code: "SLOT_UNAVAILABLE" }, { status: 409 });
+  const timeCheck = await validateRequestedAtTime({
+    shop: order.shop,
+    requestedAt,
+    fulfillmentType: payload.fulfillmentType,
+  });
+  if (!timeCheck.ok) {
+    return NextResponse.json({ error: timeCheck.error, code: timeCheck.error }, { status: 409 });
   }
 
   let deliveryDistanceMeters: number | null = null;
@@ -108,7 +134,7 @@ export async function POST(request: Request) {
         deliveryPlaceId:
           payload.fulfillmentType === "DELIVERY" ? payload.deliveryPlaceId ?? null : null,
         deliveryDistanceMeters,
-        requestedAt: payload.requestedAt,
+        requestedAt,
         subtotalCents: cart.subtotalCents,
         totalCents: cart.subtotalCents,
         notes: payload.notes?.trim() || null,

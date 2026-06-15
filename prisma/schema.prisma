@@ -29,6 +29,8 @@ model Shop {
   latitude             Float?
   longitude            Float?
   deliveryRadiusMeters Int                   @default(0)
+  prepMinutes          Int                   @default(25)
+  deliveryPrepMinutes  Int                   @default(45)
   createdAt            DateTime              @default(now())
   categories           MenuCategory[]
   customers            Customer[]

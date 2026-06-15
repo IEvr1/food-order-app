@@ -16,6 +16,8 @@ export async function ensureShopSeed() {
       latitude: DEMO_SHOP_LAT,
       longitude: DEMO_SHOP_LNG,
       deliveryRadiusMeters: 0,
+      prepMinutes: 25,
+      deliveryPrepMinutes: 45,
       hours: {
         create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
           weekday,

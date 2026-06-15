@@ -5,43 +5,56 @@ import { ensureShopSeed } from "@/lib/bootstrap";
 import { validateDeliveryLocation } from "@/lib/delivery-zone";
 import {
   getNextOrderNumber,
-  listOrderTimeSlots,
   orderDateForInstant,
   resolveCartLines,
+  validateRequestedAtTime,
 } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { normalizePhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
-import { isShopClosedOnLocalDate } from "@/lib/shop-closure";
 import { sendBookingSms } from "@/lib/sms";
 import {
   buildOrderConfirmedSms,
   createSmsManageUrl,
   smsWhenFromInstant,
 } from "@/lib/sms-templates";
-import { isoDateInTimeZone } from "@/lib/timezone";
+import { zonedWallTimeToUtc } from "@/lib/timezone";
 
 const cartLineSchema = z.object({
   menuItemId: z.string(),
   quantity: z.number().int().min(1).max(99),
 });
 
-const orderSchema = z.object({
-  items: z.array(cartLineSchema).min(1),
-  fulfillmentType: z.enum(["PICKUP", "DELIVERY"]),
-  requestedAt: z
-    .string()
-    .refine((s) => !Number.isNaN(new Date(s).getTime()), { message: "Invalid requestedAt" })
-    .transform((s) => new Date(s)),
-  name: z.string().min(2),
-  phone: z.string().min(8),
-  notes: z.string().max(500).optional(),
-  deliveryAddress: z.string().max(500).optional(),
-  deliveryLat: z.number().optional(),
-  deliveryLng: z.number().optional(),
-  deliveryPlaceId: z.string().optional(),
-  lang: z.string().optional(),
-});
+const orderSchema = z
+  .object({
+    items: z.array(cartLineSchema).min(1),
+    fulfillmentType: z.enum(["PICKUP", "DELIVERY"]),
+    timing: z.enum(["ASAP", "SCHEDULED"]).default("ASAP"),
+    scheduledDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    scheduledTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/)
+      .optional(),
+    name: z.string().min(2),
+    phone: z.string().min(8),
+    notes: z.string().max(500).optional(),
+    deliveryAddress: z.string().max(500).optional(),
+    deliveryLat: z.number().optional(),
+    deliveryLng: z.number().optional(),
+    deliveryPlaceId: z.string().optional(),
+    lang: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.timing === "SCHEDULED" && (!data.scheduledDate || !data.scheduledTime)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "scheduledDate and scheduledTime required for scheduled orders",
+      });
+    }
+  });
 
 export async function POST(request: Request) {
   await ensureShopSeed();
@@ -66,7 +79,10 @@ export async function POST(request: Request) {
           invalidPhone:
             "Βάλτε έγκυρο κυπριακό κινητό: 8 ψηφία (π.χ. 99XXXXXX χωρίς +357).",
           shopClosed: "Το κατάστημα είναι κλειστά αυτή την ημερομηνία.",
-          slotUnavailable: "Η επιλεγμένη ώρα δεν είναι πλέον διαθέσιμη.",
+          outsideHours: "Η ώρα είναι εκτός ωραρίου λειτουργίας.",
+          tooSoon: "Η ώρα είναι πολύ σύντομα. Δοκιμάστε αργότερα.",
+          pastTime: "Η ώρα έχει περάσει.",
+          shopClosedNow: "Το κατάστημα είναι κλειστά αυτή τη στιγμή.",
           deliveryRequired: "Απαιτείται διεύθυνση και τοποθεσία για delivery.",
           outOfZone: "Δεν παραδίδουμε σε αυτή την περιοχή.",
           deliveryDisabled: "Το delivery δεν είναι διαθέσιμο αυτή τη στιγμή.",
@@ -77,7 +93,10 @@ export async function POST(request: Request) {
           emptyCart: "Cart is empty",
           invalidPhone: "Enter a valid Cyprus mobile: 8 digits without +357.",
           shopClosed: "The shop is closed on this date.",
-          slotUnavailable: "Selected time is no longer available.",
+          outsideHours: "That time is outside opening hours.",
+          tooSoon: "That time is too soon. Please choose a later time.",
+          pastTime: "That time has already passed.",
+          shopClosedNow: "The shop is closed right now.",
           deliveryRequired: "Delivery address and location are required.",
           outOfZone: "We do not deliver to this area.",
           deliveryDisabled: "Delivery is not available right now.",
@@ -107,18 +126,31 @@ export async function POST(request: Request) {
     );
   }
 
-  const requestedAt = payload.requestedAt;
-  const localDate = isoDateInTimeZone(requestedAt, shop.timezone);
-  if (await isShopClosedOnLocalDate(shop.id, localDate)) {
-    return NextResponse.json({ error: t.shopClosed, code: "SHOP_CLOSED" }, { status: 409 });
+  let requestedAt: Date;
+  if (payload.timing === "ASAP") {
+    requestedAt = new Date();
+  } else {
+    const [hour, minute] = payload.scheduledTime!.split(":").map(Number);
+    requestedAt = zonedWallTimeToUtc(payload.scheduledDate!, hour, minute, 0, shop.timezone);
   }
 
-  const slots = await listOrderTimeSlots({ shop, dateIso: localDate });
-  if (!slots.some((s) => s.iso === requestedAt.toISOString())) {
-    return NextResponse.json(
-      { error: t.slotUnavailable, code: "SLOT_UNAVAILABLE" },
-      { status: 409 },
-    );
+  const timeCheck = await validateRequestedAtTime({
+    shop,
+    requestedAt,
+    fulfillmentType: payload.fulfillmentType,
+  });
+  if (!timeCheck.ok) {
+    const msg =
+      timeCheck.error === "SHOP_CLOSED"
+        ? payload.timing === "ASAP"
+          ? t.shopClosedNow
+          : t.shopClosed
+        : timeCheck.error === "OUTSIDE_HOURS"
+          ? t.outsideHours
+          : timeCheck.error === "TOO_SOON"
+            ? t.tooSoon
+            : t.pastTime;
+    return NextResponse.json({ error: msg, code: timeCheck.error }, { status: 409 });
   }
 
   let deliveryDistanceMeters: number | null = null;

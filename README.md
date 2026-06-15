@@ -69,6 +69,23 @@ SMS via Twilio and/or `SMS_GATEWAY_URL` + `SMS_GATEWAY_API_KEY`.
 - `/dashboard/settings` — shop location & delivery radius
 - `/l/:code` — SMS short link
 
+## Deployment model
+
+**Ένα εστιατόριο = ένα Vercel project + μία PostgreSQL βάση.**
+
+The app is single-tenant in code (`shop.findFirst()`). To onboard another restaurant, deploy again — same Git repo, isolated resources. Do **not** share `DATABASE_URL` or secrets between shops.
+
+| Per restaurant | |
+|----------------|--|
+| Vercel project | Link same repo, separate env |
+| `DATABASE_URL` | Dedicated Postgres (e.g. Neon) |
+| Secrets | Own `SMS_LINK_SECRET`, `DASHBOARD_LINK_SECRET`, Twilio, Maps key |
+| `APP_BASE_URL` | Own subdomain, e.g. `souvlaki.example.com` |
+
+**Quick onboarding:** new DB → new Vercel project → env vars → `prisma migrate deploy` → DNS → `npm run dashboard:link` → configure shop in Settings.
+
+Multi-tenant single deployment (`/{slug}/chat`) is **not** planned for MVP. See [`DECISIONS.md`](DECISIONS.md) ADR-006 for full checklist and rationale.
+
 ## Notes
 
 - Cyprus phones: 8 digits without `+357`

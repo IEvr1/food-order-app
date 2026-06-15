@@ -22,6 +22,8 @@ export default async function DashboardSettingsPage({
         latitude: shop.latitude,
         longitude: shop.longitude,
         deliveryRadiusMeters: shop.deliveryRadiusMeters,
+        prepMinutes: shop.prepMinutes,
+        deliveryPrepMinutes: shop.deliveryPrepMinutes,
       }}
     />
   );

@@ -9,13 +9,12 @@ import { isDashboardMutationAuthorized } from "@/lib/dashboard-auth";
 import { isDeliveryEnabled, validateDeliveryLocation } from "@/lib/delivery-zone";
 import { parseLocale, type Locale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { sendBookingSms } from "@/lib/sms";
 import {
-  buildOrderCancelledSms,
-  buildOrderOutForDeliverySms,
-  buildOrderReadySms,
-  createSmsManageUrl,
-} from "@/lib/sms-templates";
+  buildOrderStatusSms,
+  messageKindFromStatusTransition,
+} from "@/lib/order-messages";
+import { sendBookingSms } from "@/lib/sms";
+import { createSmsManageUrl } from "@/lib/sms-templates";
 
 const statusSchema = z.object({
   orderId: z.string(),
@@ -30,10 +29,14 @@ const statusSchema = z.object({
   lang: z.string().optional(),
 });
 
+const prepMinutesSchema = z.number().int().min(5).max(180);
+
 const settingsSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
   deliveryRadiusKm: z.number().min(0).max(15),
+  prepMinutes: prepMinutesSchema,
+  deliveryPrepMinutes: prepMinutesSchema,
   lang: z.string().optional(),
 });
 
@@ -68,34 +71,26 @@ export async function updateOrderStatusFromDashboard(input: z.infer<typeof statu
     return { ok: false as const, error: "not_found" };
   }
 
+  const newStatus = data.status as OrderStatus;
+  if (order.status === newStatus) {
+    revalidatePath("/dashboard");
+    return { ok: true as const };
+  }
+
   await prisma.order.update({
     where: { id: order.id },
-    data: { status: data.status as OrderStatus },
+    data: { status: newStatus },
   });
 
-  const manageUrl = await createSmsManageUrl({
-    shopId: order.shopId,
-    phoneE164: order.customer.phoneE164,
-    orderId: order.id,
-  });
-
+  const messageKind = messageKindFromStatusTransition(newStatus, order.fulfillmentType);
   let message: string | null = null;
-  if (data.status === "READY" && order.fulfillmentType === "PICKUP") {
-    message = buildOrderReadySms({
-      shopName: order.shop.name,
-      orderNumber: order.orderNumber,
-      manageUrl,
-      lang,
+  if (messageKind) {
+    const manageUrl = await createSmsManageUrl({
+      shopId: order.shopId,
+      phoneE164: order.customer.phoneE164,
+      orderId: order.id,
     });
-  } else if (data.status === "OUT_FOR_DELIVERY") {
-    message = buildOrderOutForDeliverySms({
-      shopName: order.shop.name,
-      orderNumber: order.orderNumber,
-      manageUrl,
-      lang,
-    });
-  } else if (data.status === "CANCELLED") {
-    message = buildOrderCancelledSms({
+    message = buildOrderStatusSms(messageKind, {
       shopName: order.shop.name,
       orderNumber: order.orderNumber,
       manageUrl,
@@ -135,11 +130,14 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
       latitude: data.latitude,
       longitude: data.longitude,
       deliveryRadiusMeters: Math.round(data.deliveryRadiusKm * 1000),
+      prepMinutes: data.prepMinutes,
+      deliveryPrepMinutes: data.deliveryPrepMinutes,
     },
   });
 
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");
+  revalidatePath("/chat");
   return { ok: true as const, deliveryEnabled: isDeliveryEnabled({
     latitude: data.latitude,
     longitude: data.longitude,
