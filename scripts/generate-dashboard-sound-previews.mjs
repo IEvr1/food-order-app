@@ -97,13 +97,13 @@ const brightBell = renderSound(
 
 const softMarimba = renderSound(
   [
-    { freq: 392, start: 0, duration: 0.22, volume: 0.3, wave: "triangle" },
-    { freq: 523.25, start: 0.11, duration: 0.22, volume: 0.3, wave: "triangle" },
-    { freq: 659.25, start: 0.22, duration: 0.22, volume: 0.3, wave: "triangle" },
-    { freq: 783.99, start: 0.33, duration: 0.35, volume: 0.34, wave: "triangle" },
+    { freq: 392, start: 0, duration: 0.22, volume: 0.38, wave: "triangle" },
+    { freq: 523.25, start: 0.11, duration: 0.22, volume: 0.38, wave: "triangle" },
+    { freq: 659.25, start: 0.22, duration: 0.22, volume: 0.38, wave: "triangle" },
+    { freq: 783.99, start: 0.33, duration: 0.35, volume: 0.43, wave: "triangle" },
   ],
   0.8,
-  (s) => normalize(Array.from(s)),
+  (s) => normalize(Array.from(s), 0.98),
 );
 
 writeWav(join(OUT_DIR, "option-1-current-chime.wav"), current);
