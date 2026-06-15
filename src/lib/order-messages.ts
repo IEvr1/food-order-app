@@ -30,10 +30,15 @@ type StatusSmsBase = {
 export function messageKindFromStatusTransition(
   newStatus: OrderStatus,
   fulfillmentType: FulfillmentType,
+  previousStatus?: OrderStatus,
 ): CustomerMessageKind | null {
   switch (newStatus) {
     case "READY":
       return fulfillmentType === "PICKUP" ? "ORDER_READY_PICKUP" : null;
+    case "COMPLETED":
+      return fulfillmentType === "PICKUP" && previousStatus === "PREPARING"
+        ? "ORDER_READY_PICKUP"
+        : null;
     case "OUT_FOR_DELIVERY":
       return "ORDER_ON_THE_WAY";
     case "CANCELLED":

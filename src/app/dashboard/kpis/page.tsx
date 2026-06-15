@@ -29,7 +29,7 @@ export default async function KpisPage({
           fulfillment: "Τύπος",
           all: "Όλα",
           apply: "Εφαρμογή",
-          pickup: "Παραλαβή",
+          pickup: "TakeAway",
           delivery: "Delivery",
         }
       : {
@@ -78,7 +78,7 @@ export default async function KpisPage({
           orders: "Παραγγελίες",
           revenue: "Έσοδα",
           avg: "Μέση αξία",
-          pickup: "Παραλαβή",
+          pickup: "TakeAway",
           delivery: "Delivery",
           customers: "Πελάτες",
         }

@@ -2,7 +2,7 @@ import type { Locale } from "@/lib/locale";
 
 const STATUS_LABELS: Record<string, Record<Locale, string>> = {
   PENDING: { el: "Εκκρεμεί", en: "Pending" },
-  CONFIRMED: { el: "Επιβεβαιωμένη", en: "Confirmed" },
+  CONFIRMED: { el: "Νέα Παραγγελία", en: "Confirmed" },
   PREPARING: { el: "Σε προετοιμασία", en: "Preparing" },
   READY: { el: "Έτοιμη", en: "Ready" },
   OUT_FOR_DELIVERY: { el: "Στο δρόμο", en: "On the way" },

@@ -10,7 +10,7 @@ import {
 import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { formatSalonDateTimeDisplay, localeTagForLang } from "@/lib/timezone";
+import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang } from "@/lib/timezone";
 import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 import {
   DashboardOrdersView,
@@ -43,7 +43,7 @@ export default async function DashboardPage({
           fulfillment: "Τύπος",
           all: "Όλα",
           apply: "Εφαρμογή",
-          pickup: "Παραλαβή",
+          pickup: "TakeAway",
           delivery: "Delivery",
         }
       : {
@@ -68,12 +68,14 @@ export default async function DashboardPage({
           kpis: "KPIs",
           closures: "Κλειστά",
           history: "Ιστορικό",
-          pickup: "Παραλαβή",
+          pickup: "TakeAway",
           delivery: "Delivery",
           openMaps: "Άνοιγμα στο Maps",
           cancel: "Ακύρωση",
-          next_PREPARING: "Έναρξη προετοιμασίας",
-          next_READY: "Έτοιμη",
+          cancelConfirm: "Ακύρωση παραγγελίας #{n}; Θα σταλεί SMS στον πελάτη.",
+          moreItems: "ακόμα",
+          next_PREPARING: "Προετοιμασία",
+          next_ready_pickup: "Έτοιμη",
           next_OUT_FOR_DELIVERY: "Στο δρόμο",
           next_COMPLETED: "Ολοκληρώθηκε",
           filters: filterLabels,
@@ -90,10 +92,12 @@ export default async function DashboardPage({
           delivery: "Delivery",
           openMaps: "Open in Maps",
           cancel: "Cancel",
-          next_PREPARING: "Start preparing",
-          next_READY: "Ready",
-          next_OUT_FOR_DELIVERY: "Out for delivery",
-          next_COMPLETED: "Complete",
+          cancelConfirm: "Cancel order #{n}? An SMS will be sent to the customer.",
+          moreItems: "more",
+          next_PREPARING: "Prepare",
+          next_ready_pickup: "Ready",
+          next_OUT_FOR_DELIVERY: "On the way",
+          next_COMPLETED: "Done",
           filters: filterLabels,
         };
 
@@ -134,6 +138,7 @@ export default async function DashboardPage({
     id: order.id,
     orderNumber: order.orderNumber,
     requestedAtDisplay: formatSalonDateTimeDisplay(order.requestedAt, shop.timezone, intlLocale),
+    requestedTimeDisplay: formatSalonTime(order.requestedAt, shop.timezone, intlLocale),
     customerName: order.customer.name,
     phoneE164: order.customer.phoneE164,
     fulfillmentType: order.fulfillmentType,
@@ -209,8 +214,10 @@ export default async function DashboardPage({
             pickup: t.pickup,
             openMaps: t.openMaps,
             cancel: t.cancel,
+            cancelConfirm: t.cancelConfirm,
+            moreItems: t.moreItems,
             next_PREPARING: t.next_PREPARING,
-            next_READY: t.next_READY,
+            next_ready_pickup: t.next_ready_pickup,
             next_OUT_FOR_DELIVERY: t.next_OUT_FOR_DELIVERY,
             next_COMPLETED: t.next_COMPLETED,
           }}

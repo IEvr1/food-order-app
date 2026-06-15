@@ -98,7 +98,11 @@ export async function updateOrderStatusFromDashboard(input: z.infer<typeof statu
     data: { status: newStatus },
   });
 
-  const messageKind = messageKindFromStatusTransition(newStatus, order.fulfillmentType);
+  const messageKind = messageKindFromStatusTransition(
+    newStatus,
+    order.fulfillmentType,
+    order.status,
+  );
   let message: string | null = null;
   if (messageKind) {
     const manageUrl = await createSmsManageUrl({

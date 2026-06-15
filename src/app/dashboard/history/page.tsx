@@ -10,7 +10,7 @@ import {
 import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { formatSalonDateTimeDisplay, localeTagForLang, todayIsoInTimeZone } from "@/lib/timezone";
+import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang, todayIsoInTimeZone } from "@/lib/timezone";
 import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 import {
   DashboardOrdersView,
@@ -44,7 +44,7 @@ export default async function DashboardHistoryPage({
           fulfillment: "Τύπος",
           all: "Όλα",
           apply: "Εφαρμογή",
-          pickup: "Παραλαβή",
+          pickup: "TakeAway",
           delivery: "Delivery",
         }
       : {
@@ -65,7 +65,7 @@ export default async function DashboardHistoryPage({
           title: "Ιστορικό παραγγελιών",
           back: "← Παραγγελίες",
           empty: "Δεν βρέθηκαν παραγγελίες σε αυτή την περίοδο.",
-          pickup: "Παραλαβή",
+          pickup: "TakeAway",
           delivery: "Delivery",
           openMaps: "Άνοιγμα στο Maps",
           filters: filterLabels,
@@ -120,6 +120,7 @@ export default async function DashboardHistoryPage({
       id: order.id,
       orderNumber: order.orderNumber,
       requestedAtDisplay: formatSalonDateTimeDisplay(order.requestedAt, shop.timezone, intlLocale),
+      requestedTimeDisplay: formatSalonTime(order.requestedAt, shop.timezone, intlLocale),
       customerName: order.customer.name,
       phoneE164: order.customer.phoneE164,
       fulfillmentType: order.fulfillmentType,
@@ -183,6 +184,7 @@ export default async function DashboardHistoryPage({
             delivery: t.delivery,
             pickup: t.pickup,
             openMaps: t.openMaps,
+            moreItems: lang === "el" ? "ακόμα" : "more",
           }}
         />
       </main>

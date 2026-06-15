@@ -69,7 +69,7 @@ export function ShopSettingsPanel({
       ? {
           title: "Ρυθμίσεις καταστήματος",
           prepSection: "Χρόνοι εκτίμησης",
-          prepPickup: "Παραλαβή (λεπτά)",
+          prepPickup: "TakeAway (λεπτά)",
           prepDelivery: "Delivery (λεπτά)",
           prepHint: "Εμφανίζονται στον πελάτη κατά την παραγγελία.",
           hoursSection: "Ωράριο λειτουργίας",
