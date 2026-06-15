@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-const DEFAULT_INTERVAL_MS = 10_000;
+const DEFAULT_INTERVAL_MS = 8_000;
 
 export function DashboardAutoRefresh({
   intervalMs = DEFAULT_INTERVAL_MS,
