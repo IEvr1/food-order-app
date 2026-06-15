@@ -31,12 +31,27 @@ const statusSchema = z.object({
 
 const prepMinutesSchema = z.number().int().min(5).max(180);
 
+const shopHourEntrySchema = z
+  .object({
+    weekday: z.number().int().min(0).max(6),
+    startHour: z.number().int().min(0).max(23),
+    endHour: z.number().int().min(1).max(24),
+  })
+  .refine((h) => h.endHour > h.startHour, { message: "endHour must be after startHour" });
+
+const prepTimesSchema = z.object({
+  prepMinutes: prepMinutesSchema,
+  deliveryPrepMinutes: prepMinutesSchema,
+  lang: z.string().optional(),
+});
+
 const settingsSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
   deliveryRadiusKm: z.number().min(0).max(15),
   prepMinutes: prepMinutesSchema,
   deliveryPrepMinutes: prepMinutesSchema,
+  hours: z.array(shopHourEntrySchema),
   lang: z.string().optional(),
 });
 
@@ -74,6 +89,7 @@ export async function updateOrderStatusFromDashboard(input: z.infer<typeof statu
   const newStatus = data.status as OrderStatus;
   if (order.status === newStatus) {
     revalidatePath("/dashboard");
+    revalidatePath("/dashboard/history");
     return { ok: true as const };
   }
 
@@ -107,6 +123,34 @@ export async function updateOrderStatusFromDashboard(input: z.infer<typeof statu
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  return { ok: true as const };
+}
+
+export async function updateShopPrepTimes(input: z.infer<typeof prepTimesSchema>) {
+  const data = prepTimesSchema.parse(input);
+  const lang = parseLocale(data.lang);
+
+  const authError = await requireDashboardAuth(lang);
+  if (authError) return authError;
+
+  await ensureShopSeed();
+
+  const shop = await prisma.shop.findFirst();
+  if (!shop) {
+    return { ok: false as const, error: "no_shop" };
+  }
+
+  await prisma.shop.update({
+    where: { id: shop.id },
+    data: {
+      prepMinutes: data.prepMinutes,
+      deliveryPrepMinutes: data.deliveryPrepMinutes,
+    },
+  });
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/chat");
   return { ok: true as const };
 }
 
@@ -124,16 +168,27 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
     return { ok: false as const, error: "no_shop" };
   }
 
-  await prisma.shop.update({
-    where: { id: shop.id },
-    data: {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      deliveryRadiusMeters: Math.round(data.deliveryRadiusKm * 1000),
-      prepMinutes: data.prepMinutes,
-      deliveryPrepMinutes: data.deliveryPrepMinutes,
-    },
-  });
+  await prisma.$transaction([
+    prisma.shop.update({
+      where: { id: shop.id },
+      data: {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        deliveryRadiusMeters: Math.round(data.deliveryRadiusKm * 1000),
+        prepMinutes: data.prepMinutes,
+        deliveryPrepMinutes: data.deliveryPrepMinutes,
+      },
+    }),
+    prisma.shopHours.deleteMany({ where: { shopId: shop.id } }),
+    prisma.shopHours.createMany({
+      data: data.hours.map((h) => ({
+        shopId: shop.id,
+        weekday: h.weekday,
+        startHour: h.startHour,
+        endHour: h.endHour,
+      })),
+    }),
+  ]);
 
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");

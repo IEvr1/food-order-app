@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { DashboardLangSwitch } from "@/app/dashboard/dashboard-lang-switch";
 
 export const metadata: Metadata = {
   applicationName: "Food Order Dashboard",
@@ -15,5 +17,14 @@ export default function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return children;
+  return (
+    <>
+      <div className="fixed top-3 right-3 z-50">
+        <Suspense fallback={null}>
+          <DashboardLangSwitch />
+        </Suspense>
+      </div>
+      {children}
+    </>
+  );
 }

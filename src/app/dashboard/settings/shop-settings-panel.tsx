@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   APIProvider,
@@ -10,6 +10,44 @@ import {
 } from "@vis.gl/react-google-maps";
 import { updateShopDeliverySettings } from "@/app/dashboard/order-actions";
 import { parseLocale, type Locale } from "@/lib/locale";
+import {
+  defaultShopHours,
+  formatShopHour,
+  type ShopHourEntry,
+  WEEKDAY_DISPLAY_ORDER,
+  weekdayLabels,
+} from "@/lib/shop-hours";
+
+type DayHoursState = {
+  weekday: number;
+  open: boolean;
+  startHour: number;
+  endHour: number;
+};
+
+function buildDayStates(hours: ShopHourEntry[]): DayHoursState[] {
+  const defaults = defaultShopHours();
+  return WEEKDAY_DISPLAY_ORDER.map((weekday) => {
+    const row = hours.find((h) => h.weekday === weekday);
+    const fallback = defaults.find((d) => d.weekday === weekday)!;
+    return {
+      weekday,
+      open: Boolean(row),
+      startHour: row?.startHour ?? fallback.startHour,
+      endHour: row?.endHour ?? fallback.endHour,
+    };
+  });
+}
+
+function dayStatesToEntries(days: DayHoursState[]): ShopHourEntry[] {
+  return days
+    .filter((d) => d.open && d.endHour > d.startHour)
+    .map((d) => ({
+      weekday: d.weekday,
+      startHour: d.startHour,
+      endHour: d.endHour,
+    }));
+}
 
 export function ShopSettingsPanel({
   lang,
@@ -23,6 +61,7 @@ export function ShopSettingsPanel({
     deliveryRadiusMeters: number;
     prepMinutes: number;
     deliveryPrepMinutes: number;
+    hours: ShopHourEntry[];
   };
 }) {
   const t =
@@ -33,12 +72,19 @@ export function ShopSettingsPanel({
           prepPickup: "Παραλαβή (λεπτά)",
           prepDelivery: "Delivery (λεπτά)",
           prepHint: "Εμφανίζονται στον πελάτη κατά την παραγγελία.",
+          hoursSection: "Ωράριο λειτουργίας",
+          hoursHint: "Ημέρες και ώρες που δέχεστε παραγγελίες (ώρα λήξης = κλείσιμο).",
+          open: "Ανοιχτό",
+          from: "Από",
+          until: "Έως",
+          closed: "Κλειστό",
           location: "Θέση καταστήματος",
           radius: "Ακτίνα delivery (km)",
           save: "Αποθήκευση",
           saved: "Αποθηκεύτηκε!",
           back: "Πίσω",
           hint: "Σύρετε την καρφίτσα στο κατάστημα και ορίστε την ακτίνα delivery.",
+          hoursError: "Η ώρα λήξης πρέπει να είναι μετά την ώρα έναρξης.",
         }
       : {
           title: "Shop settings",
@@ -46,13 +92,30 @@ export function ShopSettingsPanel({
           prepPickup: "Pickup (minutes)",
           prepDelivery: "Delivery (minutes)",
           prepHint: "Shown to customers when ordering.",
+          hoursSection: "Opening hours",
+          hoursHint: "Days and hours when you accept orders (closing time = end hour).",
+          open: "Open",
+          from: "From",
+          until: "Until",
+          closed: "Closed",
           location: "Shop location",
           radius: "Delivery radius (km)",
           save: "Save",
           saved: "Saved!",
           back: "Back",
           hint: "Drag the pin to your shop and set the delivery radius.",
+          hoursError: "Closing time must be after opening time.",
         };
+
+  const labels = useMemo(() => weekdayLabels(lang), [lang]);
+  const hourOptions = useMemo(
+    () => Array.from({ length: 24 }, (_, i) => i),
+    [],
+  );
+  const endHourOptions = useMemo(
+    () => Array.from({ length: 24 }, (_, i) => i + 1),
+    [],
+  );
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const defaultLat = shop.latitude ?? 35.1856;
@@ -62,10 +125,25 @@ export function ShopSettingsPanel({
   const [radiusKm, setRadiusKm] = useState((shop.deliveryRadiusMeters / 1000) || 3);
   const [prepMinutes, setPrepMinutes] = useState(shop.prepMinutes);
   const [deliveryPrepMinutes, setDeliveryPrepMinutes] = useState(shop.deliveryPrepMinutes);
+  const [dayHours, setDayHours] = useState<DayHoursState[]>(() => buildDayStates(shop.hours));
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const updateDay = (weekday: number, patch: Partial<DayHoursState>) => {
+    setDayHours((prev) =>
+      prev.map((d) => (d.weekday === weekday ? { ...d, ...patch } : d)),
+    );
+  };
+
+  const hoursValid = dayHours.every(
+    (d) => !d.open || d.endHour > d.startHour,
+  );
+
   const save = () => {
+    if (!hoursValid) {
+      setMessage(t.hoursError);
+      return;
+    }
     startTransition(async () => {
       const result = await updateShopDeliverySettings({
         latitude: lat,
@@ -73,6 +151,7 @@ export function ShopSettingsPanel({
         deliveryRadiusKm: radiusKm,
         prepMinutes,
         deliveryPrepMinutes,
+        hours: dayStatesToEntries(dayHours),
         lang,
       });
       setMessage(result.ok ? t.saved : "Error");
@@ -116,6 +195,73 @@ export function ShopSettingsPanel({
             />
           </label>
         </div>
+      </section>
+
+      <section className="mt-6 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
+        <h2 className="text-sm font-semibold text-zinc-900">{t.hoursSection}</h2>
+        <p className="mt-1 text-xs text-zinc-500">{t.hoursHint}</p>
+        <ul className="mt-4 space-y-3">
+          {dayHours.map((day) => {
+            const invalid = day.open && day.endHour <= day.startHour;
+            return (
+              <li
+                key={day.weekday}
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-white px-3 py-2 ring-1 ring-zinc-200"
+              >
+                <span className="min-w-[5.5rem] text-sm font-medium text-zinc-900">
+                  {labels[day.weekday]}
+                </span>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={day.open}
+                    onChange={(e) => updateDay(day.weekday, { open: e.target.checked })}
+                    className="rounded border-zinc-300"
+                  />
+                  {t.open}
+                </label>
+                {day.open ? (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-500">{t.from}</span>
+                      <select
+                        value={day.startHour}
+                        onChange={(e) =>
+                          updateDay(day.weekday, { startHour: Number(e.target.value) })
+                        }
+                        className="rounded-lg border border-zinc-300 px-2 py-1"
+                      >
+                        {hourOptions.map((h) => (
+                          <option key={h} value={h}>
+                            {formatShopHour(h, lang)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-500">{t.until}</span>
+                      <select
+                        value={day.endHour}
+                        onChange={(e) =>
+                          updateDay(day.weekday, { endHour: Number(e.target.value) })
+                        }
+                        className={`rounded-lg border px-2 py-1 ${invalid ? "border-red-400" : "border-zinc-300"}`}
+                      >
+                        {endHourOptions.map((h) => (
+                          <option key={h} value={h} disabled={h <= day.startHour}>
+                            {formatShopHour(h, lang)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                ) : (
+                  <span className="text-sm text-zinc-400">{t.closed}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       <p className="mt-6 text-sm text-zinc-600">{t.hint}</p>
@@ -173,13 +319,19 @@ export function ShopSettingsPanel({
 
       <button
         type="button"
-        disabled={pending}
+        disabled={pending || !hoursValid}
         onClick={save}
         className="mt-6 w-full rounded-xl bg-orange-600 py-3 font-semibold text-white disabled:opacity-50"
       >
         {t.save}
       </button>
-      {message && <p className="mt-2 text-sm text-emerald-700">{message}</p>}
+      {message && (
+        <p
+          className={`mt-2 text-sm ${message === t.saved ? "text-emerald-700" : "text-red-700"}`}
+        >
+          {message}
+        </p>
+      )}
     </div>
   );
 }

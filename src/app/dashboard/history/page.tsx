@@ -4,27 +4,28 @@ import { ensureShopSeed } from "@/lib/bootstrap";
 import {
   customerPhoneSearchWhere,
   parseOrderStatus,
-  resolveTodayDashboardDateRange,
+  resolveHistoryDateRange,
   salonLocalDateRangeBoundsUtc,
 } from "@/lib/dashboard-query";
 import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { formatSalonDateTimeDisplay, localeTagForLang } from "@/lib/timezone";
+import { formatSalonDateTimeDisplay, localeTagForLang, todayIsoInTimeZone } from "@/lib/timezone";
 import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 import {
   DashboardOrdersView,
   type DashboardOrderRow,
 } from "@/app/dashboard/dashboard-orders-view";
 import { DashboardNexalplaLogo } from "@/app/dashboard/dashboard-nexalpla-logo";
-import { DashboardPwaInstall } from "@/app/dashboard/dashboard-pwa-install";
 import { isDashboardLinkAuthAvailable } from "@/lib/dashboard-auth";
 
-export default async function DashboardPage({
+export default async function DashboardHistoryPage({
   searchParams,
 }: {
   searchParams: Promise<{
     lang?: string;
+    from?: string;
+    to?: string;
     status?: string;
     phone?: string;
     fulfillment?: string;
@@ -61,39 +62,21 @@ export default async function DashboardPage({
   const t =
     lang === "el"
       ? {
-          title: "Παραγγελίες",
-          today: "Σήμερα",
-          empty: "Δεν βρέθηκαν παραγγελίες.",
-          settings: "Ρυθμίσεις",
-          kpis: "KPIs",
-          closures: "Κλειστά",
-          history: "Ιστορικό",
+          title: "Ιστορικό παραγγελιών",
+          back: "← Παραγγελίες",
+          empty: "Δεν βρέθηκαν παραγγελίες σε αυτή την περίοδο.",
           pickup: "Παραλαβή",
           delivery: "Delivery",
           openMaps: "Άνοιγμα στο Maps",
-          cancel: "Ακύρωση",
-          next_PREPARING: "Έναρξη προετοιμασίας",
-          next_READY: "Έτοιμη",
-          next_OUT_FOR_DELIVERY: "Στο δρόμο",
-          next_COMPLETED: "Ολοκληρώθηκε",
           filters: filterLabels,
         }
       : {
-          title: "Orders",
-          today: "Today",
-          empty: "No orders found.",
-          settings: "Settings",
-          kpis: "KPIs",
-          closures: "Closures",
-          history: "History",
+          title: "Order history",
+          back: "← Orders",
+          empty: "No orders found for this period.",
           pickup: "Pickup",
           delivery: "Delivery",
           openMaps: "Open in Maps",
-          cancel: "Cancel",
-          next_PREPARING: "Start preparing",
-          next_READY: "Ready",
-          next_OUT_FOR_DELIVERY: "Out for delivery",
-          next_COMPLETED: "Complete",
           filters: filterLabels,
         };
 
@@ -103,9 +86,12 @@ export default async function DashboardPage({
     return <p>No shop configured.</p>;
   }
 
-  const { from, to } = resolveTodayDashboardDateRange(shop.timezone);
-  const { start, endExclusive } = salonLocalDateRangeBoundsUtc(from, to, shop.timezone);
+  const todayIso = todayIsoInTimeZone(shop.timezone);
+  const historyDefaults = resolveHistoryDateRange({}, shop.timezone);
+  const { from, to } = resolveHistoryDateRange(params, shop.timezone);
   const intlLocale = localeTagForLang(lang);
+
+  const { start, endExclusive } = salonLocalDateRangeBoundsUtc(from, to, shop.timezone);
 
   const where: Prisma.OrderWhereInput = {
     shopId: shop.id,
@@ -127,55 +113,41 @@ export default async function DashboardPage({
   const orders = await prisma.order.findMany({
     where,
     include: { customer: true, items: true },
-    orderBy: { requestedAt: "asc" },
+    orderBy: { requestedAt: "desc" },
   });
 
   const rows: DashboardOrderRow[] = orders.map((order) => ({
-    id: order.id,
-    orderNumber: order.orderNumber,
-    requestedAtDisplay: formatSalonDateTimeDisplay(order.requestedAt, shop.timezone, intlLocale),
-    customerName: order.customer.name,
-    phoneE164: order.customer.phoneE164,
-    fulfillmentType: order.fulfillmentType,
-    deliveryAddress: order.deliveryAddress,
-    deliveryLat: order.deliveryLat,
-    deliveryLng: order.deliveryLng,
-    deliveryDistanceMeters: order.deliveryDistanceMeters,
-    status: order.status,
-    totalCents: order.totalCents,
-    totalDisplay: formatPriceEuros(order.totalCents, intlLocale),
-    notes: order.notes,
-    items: order.items.map((i) => ({
-      name: i.nameSnapshot,
-      quantity: i.quantity,
-      lineTotalCents: i.priceCentsSnapshot * i.quantity,
-    })),
+      id: order.id,
+      orderNumber: order.orderNumber,
+      requestedAtDisplay: formatSalonDateTimeDisplay(order.requestedAt, shop.timezone, intlLocale),
+      customerName: order.customer.name,
+      phoneE164: order.customer.phoneE164,
+      fulfillmentType: order.fulfillmentType,
+      deliveryAddress: order.deliveryAddress,
+      deliveryLat: order.deliveryLat,
+      deliveryLng: order.deliveryLng,
+      deliveryDistanceMeters: order.deliveryDistanceMeters,
+      status: order.status,
+      totalCents: order.totalCents,
+      totalDisplay: formatPriceEuros(order.totalCents, intlLocale),
+      notes: order.notes,
+      items: order.items.map((i) => ({
+        name: i.nameSnapshot,
+        quantity: i.quantity,
+        lineTotalCents: i.priceCentsSnapshot * i.quantity,
+      })),
   }));
 
   return (
     <div className="min-h-dvh bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 pr-16">
-          <div>
-            <h1 className="text-xl font-bold text-zinc-900">{shop.name}</h1>
-            <p className="text-sm text-zinc-500">
-              {t.title} · {t.today}
-            </p>
+        <div className="mx-auto max-w-5xl pr-16">
+          <Link href={`/dashboard?lang=${lang}`} className="text-sm text-orange-600 underline">
+            {t.back}
+          </Link>
+          <div className="mt-2">
+            <h1 className="text-xl font-bold text-zinc-900">{t.title}</h1>
           </div>
-          <nav className="flex flex-wrap gap-2 text-sm">
-            <Link href={`/dashboard/settings?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
-              {t.settings}
-            </Link>
-            <Link href={`/dashboard/kpis?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
-              {t.kpis}
-            </Link>
-            <Link href={`/dashboard/history?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
-              {t.history}
-            </Link>
-            <Link href={`/dashboard/closures?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
-              {t.closures}
-            </Link>
-          </nav>
         </div>
       </header>
 
@@ -187,20 +159,23 @@ export default async function DashboardPage({
               : "Dashboard access via signed link only."}
           </p>
         )}
-        <DashboardPwaInstall label={lang === "el" ? "Εγκατάσταση app" : "Install app"} />
         <DashboardFilters
           lang={lang}
           labels={t.filters}
-          basePath="/dashboard"
+          basePath="/dashboard/history"
+          showPeriod
+          maxDate={todayIso}
+          periodDefaults={historyDefaults}
           current={{
-            from: "",
-            to: "",
+            from,
+            to,
             status: params.status ?? "all",
             phone: params.phone ?? "",
             fulfillment: params.fulfillment ?? "all",
           }}
         />
         <DashboardOrdersView
+          readOnly
           orders={rows}
           lang={lang}
           labels={{
@@ -208,11 +183,6 @@ export default async function DashboardPage({
             delivery: t.delivery,
             pickup: t.pickup,
             openMaps: t.openMaps,
-            cancel: t.cancel,
-            next_PREPARING: t.next_PREPARING,
-            next_READY: t.next_READY,
-            next_OUT_FOR_DELIVERY: t.next_OUT_FOR_DELIVERY,
-            next_COMPLETED: t.next_COMPLETED,
           }}
         />
       </main>

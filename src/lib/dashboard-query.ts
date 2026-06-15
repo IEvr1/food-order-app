@@ -4,7 +4,6 @@ import {
   formatSalonDate,
   isoDateInTimeZone,
   salonLocalDayBoundsUtc,
-  salonLocalMonthBoundsUtc,
   todayIsoInTimeZone,
   zonedWallTimeToUtc,
 } from "@/lib/timezone";
@@ -19,26 +18,7 @@ const ORDER_STATUSES: readonly OrderStatus[] = [
   "CANCELLED",
 ];
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Short forward-looking presets (next 3 / 7 days). */
-const MAX_SHORT_RANGE_DAYS = 15;
-
-export const DASHBOARD_RANGE_PRESETS = [
-  "today",
-  "tomorrow",
-  "next3",
-  "week7",
-  "remainingMonth",
-  "currentMonth",
-  "lastMonth",
-] as const;
-
-export type DashboardRangePreset = (typeof DASHBOARD_RANGE_PRESETS)[number];
-
-export function isIsoDate(value: string): boolean {
-  return ISO_DATE.test(value);
-}
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Step calendar days in salon-local timezone (DST-safe via noon anchor). */
 export function addSalonLocalDays(isoDate: string, days: number, timeZone: string): string {
@@ -56,79 +36,103 @@ export function salonLocalDateRangeBoundsUtc(
   return { start, endExclusive };
 }
 
-function clampShortDashboardDateRange(
-  from: string,
-  to: string,
-  timeZone: string,
-): { from: string; to: string } {
-  let f = from;
-  let t = to;
-  if (f > t) {
-    [f, t] = [t, f];
+export function parseIsoDateParam(value: string | undefined): string | undefined {
+  const v = value?.trim();
+  if (!v || !ISO_DATE_RE.test(v)) {
+    return undefined;
   }
-  const maxTo = addSalonLocalDays(f, MAX_SHORT_RANGE_DAYS - 1, timeZone);
-  if (t > maxTo) {
-    t = maxTo;
+  const [y, m, d] = v.split("-").map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  if (
+    probe.getUTCFullYear() !== y ||
+    probe.getUTCMonth() !== m - 1 ||
+    probe.getUTCDate() !== d
+  ) {
+    return undefined;
   }
-  return { from: f, to: t };
+  return v;
 }
 
-function salonLocalMonthLastDayIso(year: number, month: number, timeZone: string): string {
-  const { endExclusive } = salonLocalMonthBoundsUtc(year, month, timeZone);
-  return isoDateInTimeZone(new Date(endExclusive.getTime() - 60_000), timeZone);
+/** Salon-local today bounds for the operational dashboard. */
+export function resolveTodayDashboardDateRange(timeZone: string): {
+  from: string;
+  to: string;
+} {
+  const todayIso = todayIsoInTimeZone(timeZone);
+  return { from: todayIso, to: todayIso };
 }
 
-function salonLocalMonthRange(
-  year: number,
-  month: number,
+export function resolveDashboardDateRange(
+  input: { from?: string; to?: string },
   timeZone: string,
-): { from: string; to: string } {
-  const pad = (n: number) => String(n).padStart(2, "0");
+  options: {
+    defaultFrom: string;
+    defaultTo: string;
+    maxDate?: string;
+  },
+): {
+  from: string;
+  to: string;
+  dayCount: number;
+  empty: boolean;
+} {
+  const maxDate = options.maxDate ?? todayIsoInTimeZone(timeZone);
+  let from = parseIsoDateParam(input.from) ?? options.defaultFrom;
+  let to = parseIsoDateParam(input.to) ?? options.defaultTo;
+
+  if (from > maxDate) {
+    from = maxDate;
+  }
+  if (to > maxDate) {
+    to = maxDate;
+  }
+  if (from > to) {
+    [from, to] = [to, from];
+  }
+
   return {
-    from: `${year}-${pad(month)}-01`,
-    to: salonLocalMonthLastDayIso(year, month, timeZone),
+    from,
+    to,
+    dayCount: dashboardRangeDayCount(from, to, timeZone),
+    empty: false,
   };
 }
 
-function previousCalendarMonth(year: number, month: number): { year: number; month: number } {
-  if (month <= 1) {
-    return { year: year - 1, month: 12 };
-  }
-  return { year, month: month - 1 };
+/** KPI date range: defaults to salon-local today. */
+export function resolveKpiDateRange(
+  input: { from?: string; to?: string },
+  timeZone: string,
+): {
+  from: string;
+  to: string;
+  dayCount: number;
+  empty: boolean;
+} {
+  const { from, to } = resolveTodayDashboardDateRange(timeZone);
+  return resolveDashboardDateRange(input, timeZone, {
+    defaultFrom: from,
+    defaultTo: to,
+    maxDate: to,
+  });
 }
 
-export function computeDashboardPresetRange(
-  preset: DashboardRangePreset,
+/** Order history date range: defaults to salon-local yesterday. */
+export function resolveHistoryDateRange(
+  input: { from?: string; to?: string },
   timeZone: string,
-  todayIso = todayIsoInTimeZone(timeZone),
-): { from: string; to: string } {
-  const [y, m] = todayIso.split("-").map((v) => Number(v));
-
-  switch (preset) {
-    case "today":
-      return { from: todayIso, to: todayIso };
-    case "tomorrow": {
-      const day = addSalonLocalDays(todayIso, 1, timeZone);
-      return { from: day, to: day };
-    }
-    case "next3":
-      return clampShortDashboardDateRange(todayIso, addSalonLocalDays(todayIso, 2, timeZone), timeZone);
-    case "week7":
-      return clampShortDashboardDateRange(todayIso, addSalonLocalDays(todayIso, 6, timeZone), timeZone);
-    case "remainingMonth":
-      return {
-        from: todayIso,
-        to: salonLocalMonthLastDayIso(y, m, timeZone),
-      };
-    case "currentMonth":
-      return salonLocalMonthRange(y, m, timeZone);
-    case "lastMonth": {
-      const prev = previousCalendarMonth(y, m);
-      return salonLocalMonthRange(prev.year, prev.month, timeZone);
-    }
-    default:
-      return { from: todayIso, to: todayIso };
-  }
+): {
+  from: string;
+  to: string;
+  dayCount: number;
+  empty: boolean;
+} {
+  const todayIso = todayIsoInTimeZone(timeZone);
+  const yesterdayIso = addSalonLocalDays(todayIso, -1, timeZone);
+  return resolveDashboardDateRange(input, timeZone, {
+    defaultFrom: yesterdayIso,
+    defaultTo: yesterdayIso,
+    maxDate: todayIso,
+  });
 }
 
 export function dashboardRangeDayCount(from: string, to: string, timeZone: string): number {
@@ -142,63 +146,6 @@ export function dashboardRangeDayCount(from: string, to: string, timeZone: strin
     cur = addSalonLocalDays(cur, 1, timeZone);
   }
   return count;
-}
-
-function normalizeRangePreset(value: string | undefined): DashboardRangePreset | undefined {
-  if (!value?.trim()) {
-    return undefined;
-  }
-  if (value === "month") {
-    return "currentMonth";
-  }
-  if (DASHBOARD_RANGE_PRESETS.includes(value as DashboardRangePreset)) {
-    return value as DashboardRangePreset;
-  }
-  return undefined;
-}
-
-function parseDashboardRangePreset(value: string | undefined): DashboardRangePreset {
-  return normalizeRangePreset(value) ?? "today";
-}
-
-export function resolveDashboardDateRange(
-  input: {
-    range?: string;
-    from?: string;
-    to?: string;
-    date?: string;
-  },
-  timeZone: string,
-): {
-  from: string;
-  to: string;
-  preset: DashboardRangePreset;
-  dayCount: number;
-} {
-  const todayIso = todayIsoInTimeZone(timeZone);
-  const legacyDate = input.date?.trim() ?? "";
-
-  let preset = parseDashboardRangePreset(input.range?.trim());
-
-  if (!input.range?.trim() && legacyDate && isIsoDate(legacyDate)) {
-    preset = "today";
-    const { from, to } = { from: legacyDate, to: legacyDate };
-    return {
-      from,
-      to,
-      preset,
-      dayCount: dashboardRangeDayCount(from, to, timeZone),
-    };
-  }
-
-  const { from, to } = computeDashboardPresetRange(preset, timeZone, todayIso);
-
-  return {
-    from,
-    to,
-    preset,
-    dayCount: dashboardRangeDayCount(from, to, timeZone),
-  };
 }
 
 export function formatDashboardDateRangeSummary(

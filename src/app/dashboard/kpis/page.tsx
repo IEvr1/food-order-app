@@ -1,64 +1,82 @@
 ﻿import Link from "next/link";
 import { ensureShopSeed } from "@/lib/bootstrap";
+import {
+  resolveKpiDateRange,
+  resolveTodayDashboardDateRange,
+  salonLocalDateRangeBoundsUtc,
+} from "@/lib/dashboard-query";
 import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { salonLocalDayBoundsUtc, todayIsoInTimeZone } from "@/lib/timezone";
+import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 
 export default async function KpisPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lang?: string }>;
+  searchParams: Promise<{ lang?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
   const lang = parseLocale(params.lang);
   const locale = lang === "el" ? "el-GR" : "en-US";
 
+  const filterLabels =
+    lang === "el"
+      ? {
+          fromDate: "Από",
+          toDate: "Έως",
+          status: "Κατάσταση",
+          phone: "Τηλέφωνο",
+          fulfillment: "Τύπος",
+          all: "Όλα",
+          apply: "Εφαρμογή",
+          pickup: "Παραλαβή",
+          delivery: "Delivery",
+        }
+      : {
+          fromDate: "From",
+          toDate: "To",
+          status: "Status",
+          phone: "Phone",
+          fulfillment: "Type",
+          all: "All",
+          apply: "Apply",
+          pickup: "Pickup",
+          delivery: "Delivery",
+        };
+
   await ensureShopSeed();
   const shop = await prisma.shop.findFirst();
   if (!shop) return <p>No shop</p>;
 
-  const today = todayIsoInTimeZone(shop.timezone);
-  const { start, endExclusive } = salonLocalDayBoundsUtc(today, shop.timezone);
+  const periodDefaults = resolveTodayDashboardDateRange(shop.timezone);
+  const { from, to } = resolveKpiDateRange(params, shop.timezone);
 
-  const [todayOrders, todayRevenue, pickupCount, deliveryCount, customerCount] =
-    await Promise.all([
-      prisma.order.count({
-        where: { shopId: shop.id, requestedAt: { gte: start, lt: endExclusive }, status: { not: "CANCELLED" } },
-      }),
-      prisma.order.aggregate({
-        where: { shopId: shop.id, requestedAt: { gte: start, lt: endExclusive }, status: { not: "CANCELLED" } },
-        _sum: { totalCents: true },
-      }),
-      prisma.order.count({
-        where: {
-          shopId: shop.id,
-          requestedAt: { gte: start, lt: endExclusive },
-          fulfillmentType: "PICKUP",
-          status: { not: "CANCELLED" },
-        },
-      }),
-      prisma.order.count({
-        where: {
-          shopId: shop.id,
-          requestedAt: { gte: start, lt: endExclusive },
-          fulfillmentType: "DELIVERY",
-          status: { not: "CANCELLED" },
-        },
-      }),
-      prisma.customer.count({ where: { shopId: shop.id } }),
-    ]);
+  const orderWhere = {
+    shopId: shop.id,
+    status: { not: "CANCELLED" as const },
+  };
 
-  const revenue = todayRevenue._sum.totalCents ?? 0;
-  const avg = todayOrders > 0 ? Math.round(revenue / todayOrders) : 0;
+  const { start, endExclusive } = salonLocalDateRangeBoundsUtc(from, to, shop.timezone);
+  const periodWhere = { ...orderWhere, requestedAt: { gte: start, lt: endExclusive } };
+
+  const [orderCount, revenueAgg, pickupCount, deliveryCount, customerCount] = await Promise.all([
+    prisma.order.count({ where: periodWhere }),
+    prisma.order.aggregate({ where: periodWhere, _sum: { totalCents: true } }),
+    prisma.order.count({ where: { ...periodWhere, fulfillmentType: "PICKUP" } }),
+    prisma.order.count({ where: { ...periodWhere, fulfillmentType: "DELIVERY" } }),
+    prisma.customer.count({ where: { shopId: shop.id } }),
+  ]);
+
+  const revenue = revenueAgg._sum.totalCents ?? 0;
+  const avg = orderCount > 0 ? Math.round(revenue / orderCount) : 0;
 
   const t =
     lang === "el"
       ? {
           title: "KPIs",
           back: "← Dashboard",
-          todayOrders: "Παραγγελίες σήμερα",
-          revenue: "Έσοδα σήμερα",
+          orders: "Παραγγελίες",
+          revenue: "Έσοδα",
           avg: "Μέση αξία",
           pickup: "Παραλαβή",
           delivery: "Delivery",
@@ -67,8 +85,8 @@ export default async function KpisPage({
       : {
           title: "KPIs",
           back: "← Dashboard",
-          todayOrders: "Orders today",
-          revenue: "Revenue today",
+          orders: "Orders",
+          revenue: "Revenue",
           avg: "Average order",
           pickup: "Pickup",
           delivery: "Delivery",
@@ -81,9 +99,25 @@ export default async function KpisPage({
         {t.back}
       </Link>
       <h1 className="mt-4 text-2xl font-bold">{t.title}</h1>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+      <DashboardFilters
+        lang={lang}
+        labels={filterLabels}
+        basePath="/dashboard/kpis"
+        showPeriod
+        periodOnly
+        maxDate={periodDefaults.to}
+        periodDefaults={periodDefaults}
+        current={{
+          from,
+          to,
+          status: "all",
+          phone: "",
+          fulfillment: "all",
+        }}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
         {[
-          [t.todayOrders, String(todayOrders)],
+          [t.orders, String(orderCount)],
           [t.revenue, formatPriceEuros(revenue, locale)],
           [t.avg, formatPriceEuros(avg, locale)],
           [t.pickup, String(pickupCount)],
