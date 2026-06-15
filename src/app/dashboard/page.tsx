@@ -60,6 +60,7 @@ export default async function DashboardPage({
           title: "Παραγγελίες",
           today: "Σήμερα",
           empty: "Δεν βρέθηκαν παραγγελίες.",
+          newOrder: "Νέα Παραγγελία",
           settings: "Ρυθμίσεις",
           kpis: "KPIs",
           closures: "Κλειστά",
@@ -83,6 +84,7 @@ export default async function DashboardPage({
           title: "Orders",
           today: "Today",
           empty: "No orders found.",
+          newOrder: "New order",
           settings: "Settings",
           kpis: "KPIs",
           closures: "Closures",
@@ -175,6 +177,14 @@ export default async function DashboardPage({
             </p>
           </div>
           <nav className="flex flex-wrap gap-2 text-sm">
+            <Link
+              href={`/chat?lang=${lang}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-orange-600 px-3 py-1.5 font-medium text-white hover:bg-orange-700"
+            >
+              {t.newOrder}
+            </Link>
             <Link href={`/dashboard/settings?lang=${lang}`} className="rounded-lg px-3 py-1.5 ring-1 ring-zinc-200">
               {t.settings}
             </Link>
