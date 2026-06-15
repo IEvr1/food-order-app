@@ -65,15 +65,6 @@ function nextActionLabel(
   return nextStatus;
 }
 
-function itemsSummary(
-  items: DashboardOrderRow["items"],
-  moreLabel: string,
-): string {
-  const parts = items.map((item) => `${item.quantity}× ${item.name}`);
-  if (parts.length <= 2) return parts.join(", ");
-  return `${parts.slice(0, 2).join(", ")} +${parts.length - 2} ${moreLabel}`;
-}
-
 function statusAccent(status: string): string {
   switch (status) {
     case "CONFIRMED":
@@ -86,12 +77,16 @@ function statusAccent(status: string): string {
     case "OUT_FOR_DELIVERY":
       return "border-l-blue-500";
     case "COMPLETED":
-      return "border-l-zinc-300 opacity-70";
+      return "border-l-zinc-300";
     case "CANCELLED":
-      return "border-l-red-300 opacity-60";
+      return "border-l-red-300";
     default:
       return "border-l-zinc-200";
   }
+}
+
+function isInactiveStatus(status: string): boolean {
+  return status === "COMPLETED" || status === "CANCELLED";
 }
 
 function statusBadgeClass(status: string): string {
@@ -174,16 +169,16 @@ function OrderCard({
       : null;
 
   const isDelivery = order.fulfillmentType === "DELIVERY";
-  const summary = itemsSummary(order.items, labels.moreItems ?? "more");
   const timeLabel = readOnly ? order.requestedAtDisplay : order.requestedTimeDisplay;
+  const inactive = isInactiveStatus(order.status);
 
   return (
     <article
-      className={`rounded-xl border border-zinc-200 border-l-4 bg-white px-3 py-2.5 shadow-sm ${statusAccent(order.status)}`}
+      className={`rounded-xl border border-zinc-200 border-l-4 bg-white px-3 py-3 shadow-sm ${statusAccent(order.status)} ${inactive ? "bg-zinc-50/80" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-base font-bold text-zinc-900">#{order.orderNumber}</span>
+          <span className="text-lg font-bold text-zinc-950">#{order.orderNumber}</span>
           <span className="text-sm text-zinc-500">{timeLabel}</span>
           <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800">
             {isDelivery ? labels.delivery : labels.pickup}
@@ -194,19 +189,28 @@ function OrderCard({
             {orderStatusLabel(order.status, lang)}
           </span>
         </div>
-        <span className="shrink-0 text-sm font-bold text-orange-600">{order.totalDisplay}</span>
+        <span className="shrink-0 text-sm font-bold text-zinc-900">{order.totalDisplay}</span>
       </div>
 
-      <p className="mt-1 truncate text-sm text-zinc-800">
-        <span className="font-medium">{order.customerName}</span>
+      <p className="mt-1.5 truncate text-sm">
+        <span className="font-bold text-zinc-950">{order.customerName}</span>
         <span className="text-zinc-400"> · </span>
-        <span className="text-zinc-600">{formatPhoneDisplay(order.phoneE164)}</span>
+        <span className="font-medium text-zinc-600">{formatPhoneDisplay(order.phoneE164)}</span>
       </p>
 
-      <p className="mt-0.5 text-sm text-zinc-700">{summary}</p>
+      <ul className="mt-2 space-y-0.5">
+        {order.items.map((item, index) => (
+          <li
+            key={`${item.name}-${index}`}
+            className={`text-base font-bold leading-snug ${inactive ? "text-zinc-600" : "text-zinc-950"}`}
+          >
+            {item.quantity}× {item.name}
+          </li>
+        ))}
+      </ul>
 
       {order.notes && (
-        <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-sm font-semibold text-amber-950">
           {order.notes}
         </p>
       )}
