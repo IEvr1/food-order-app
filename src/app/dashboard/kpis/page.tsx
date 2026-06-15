@@ -25,7 +25,7 @@ export default async function KpisPage({
           fromDate: "Από",
           toDate: "Έως",
           status: "Κατάσταση",
-          fulfillment: "Τύπος",
+          fulfillment: "Τρόπος Παράδοσης",
           all: "Όλα",
           pickup: "TakeAway",
           delivery: "Delivery",

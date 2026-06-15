@@ -209,7 +209,7 @@ function OrderCard({
         </div>
 
         <p className="mt-1.5 truncate text-sm">
-          <span className="font-bold text-zinc-950">{order.customerName}</span>
+          <span className="font-medium text-zinc-600">{order.customerName}</span>
           <span className="text-zinc-400"> · </span>
           <span className="font-medium text-zinc-600">{formatPhoneDisplay(order.phoneE164)}</span>
         </p>
