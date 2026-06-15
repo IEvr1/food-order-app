@@ -112,6 +112,17 @@ export function DashboardOrdersView({
   );
 }
 
+function deliveryActionButtonClass(action: ActionStatus): string {
+  switch (action) {
+    case "OUT_FOR_DELIVERY":
+      return "bg-blue-600 hover:bg-blue-700";
+    case "COMPLETED":
+      return "bg-emerald-600 hover:bg-emerald-700";
+    default:
+      return "bg-orange-600 hover:bg-orange-700";
+  }
+}
+
 export function DashboardOrderCard({
   order,
   lang,
@@ -271,9 +282,7 @@ export function DashboardOrderCard({
                 type="button"
                 disabled={pending}
                 onClick={() => setStatus(action)}
-                className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50 ${
-                  action === "COMPLETED" ? "bg-zinc-800" : "bg-orange-600"
-                }`}
+                className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50 ${deliveryActionButtonClass(action)}`}
               >
                 {labels[nextActionLabelKey(order, action)] ?? action}
               </button>
