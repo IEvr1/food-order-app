@@ -20,3 +20,15 @@ export function normalizePhone(raw: string) {
 
   throw new Error("Invalid Cyprus mobile (8 digits, e.g. 99XXXXXX).");
 }
+
+/** Dashboard display: 99112233 → 99-112233 (no +357). */
+export function formatPhoneDisplay(e164: string) {
+  let digits = e164.replace(/\D/g, "");
+  if (digits.startsWith("357") && digits.length >= 11) {
+    digits = digits.slice(3);
+  }
+  if (CY_LOCAL_MOBILE.test(digits)) {
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  }
+  return digits || e164.replace(/^\+357/, "");
+}

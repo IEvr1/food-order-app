@@ -6,6 +6,7 @@ import { useTransition } from "react";
 import { updateOrderStatusFromDashboard } from "@/app/dashboard/order-actions";
 import type { Locale } from "@/lib/locale";
 import { orderStatusLabel } from "@/lib/order-status-label";
+import { formatPhoneDisplay } from "@/lib/phone";
 
 export type DashboardOrderRow = {
   id: string;
@@ -199,7 +200,7 @@ function OrderCard({
       <p className="mt-1 truncate text-sm text-zinc-800">
         <span className="font-medium">{order.customerName}</span>
         <span className="text-zinc-400"> · </span>
-        <span className="text-zinc-600">{order.phoneE164}</span>
+        <span className="text-zinc-600">{formatPhoneDisplay(order.phoneE164)}</span>
       </p>
 
       <p className="mt-0.5 text-sm text-zinc-700">{summary}</p>
