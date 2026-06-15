@@ -10,6 +10,8 @@ import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang } from "@/lib/timezone";
+import { DashboardAutoRefresh } from "@/app/dashboard/dashboard-auto-refresh";
+import { DashboardNewOrderAlert } from "@/app/dashboard/dashboard-new-order-alert";
 import { DashboardFilters } from "@/app/dashboard/dashboard-filters";
 import {
   DashboardOrdersView,
@@ -105,10 +107,12 @@ export default async function DashboardPage({
   const { start, endExclusive } = salonLocalDateRangeBoundsUtc(from, to, shop.timezone);
   const intlLocale = localeTagForLang(lang);
 
-  const where: Prisma.OrderWhereInput = {
+  const baseWhere: Prisma.OrderWhereInput = {
     shopId: shop.id,
     requestedAt: { gte: start, lt: endExclusive },
   };
+
+  const where: Prisma.OrderWhereInput = { ...baseWhere };
 
   const status = parseOrderStatus(params.status);
   if (status) where.status = status;
@@ -117,11 +121,18 @@ export default async function DashboardPage({
     where.fulfillmentType = params.fulfillment as FulfillmentType;
   }
 
-  const orders = await prisma.order.findMany({
-    where,
-    include: { customer: true, items: true },
-    orderBy: { requestedAt: "asc" },
-  });
+  const [orders, todayOrders] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      include: { customer: true, items: true },
+      orderBy: { requestedAt: "asc" },
+    }),
+    prisma.order.findMany({
+      where: baseWhere,
+      select: { id: true },
+      orderBy: { requestedAt: "asc" },
+    }),
+  ]);
 
   const rows: DashboardOrderRow[] = orders.map((order) => ({
     id: order.id,
@@ -148,6 +159,7 @@ export default async function DashboardPage({
 
   return (
     <div className="min-h-dvh bg-zinc-50">
+      <DashboardAutoRefresh />
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 pr-16">
           <div>
@@ -193,6 +205,7 @@ export default async function DashboardPage({
             fulfillment: params.fulfillment ?? "all",
           }}
         />
+        <DashboardNewOrderAlert orderIds={todayOrders.map((order) => order.id)} />
         <DashboardOrdersView
           orders={rows}
           lang={lang}

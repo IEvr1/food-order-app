@@ -65,15 +65,6 @@ function nextActionLabel(
   return nextStatus;
 }
 
-function itemsSummary(
-  items: DashboardOrderRow["items"],
-  moreLabel: string,
-): string {
-  const parts = items.map((item) => `${item.quantity}× ${item.name}`);
-  if (parts.length <= 2) return parts.join(", ");
-  return `${parts.slice(0, 2).join(", ")} +${parts.length - 2} ${moreLabel}`;
-}
-
 function statusAccent(status: string): string {
   switch (status) {
     case "CONFIRMED":
@@ -86,12 +77,16 @@ function statusAccent(status: string): string {
     case "OUT_FOR_DELIVERY":
       return "border-l-blue-500";
     case "COMPLETED":
-      return "border-l-zinc-300 opacity-70";
+      return "border-l-zinc-300";
     case "CANCELLED":
-      return "border-l-red-300 opacity-60";
+      return "border-l-red-300";
     default:
       return "border-l-zinc-200";
   }
+}
+
+function isInactiveStatus(status: string): boolean {
+  return status === "COMPLETED" || status === "CANCELLED";
 }
 
 function statusBadgeClass(status: string): string {
@@ -174,79 +169,105 @@ function OrderCard({
       : null;
 
   const isDelivery = order.fulfillmentType === "DELIVERY";
-  const summary = itemsSummary(order.items, labels.moreItems ?? "more");
   const timeLabel = readOnly ? order.requestedAtDisplay : order.requestedTimeDisplay;
+  const inactive = isInactiveStatus(order.status);
 
   return (
     <article
-      className={`rounded-xl border border-zinc-200 border-l-4 bg-white px-3 py-2.5 shadow-sm ${statusAccent(order.status)}`}
+      className={`flex overflow-hidden rounded-xl border border-zinc-200 border-l-4 bg-white shadow-sm ${statusAccent(order.status)} ${inactive ? "bg-zinc-50/80" : ""}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-base font-bold text-zinc-900">#{order.orderNumber}</span>
-          <span className="text-sm text-zinc-500">{timeLabel}</span>
-          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800">
-            {isDelivery ? labels.delivery : labels.pickup}
-          </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(order.status)}`}
-          >
-            {orderStatusLabel(order.status, lang)}
-          </span>
-        </div>
-        <span className="shrink-0 text-sm font-bold text-orange-600">{order.totalDisplay}</span>
+      <div
+        className={`flex w-16 shrink-0 flex-col items-center justify-center border-r border-zinc-200 px-2 py-3 sm:w-20 ${
+          inactive ? "bg-zinc-100" : "bg-orange-50"
+        }`}
+        aria-label={`${labels.orderNumber ?? "Order"} ${order.orderNumber}`}
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">#</span>
+        <span
+          className={`text-3xl font-black leading-none tabular-nums sm:text-4xl ${
+            inactive ? "text-zinc-500" : "text-zinc-950"
+          }`}
+        >
+          {order.orderNumber}
+        </span>
       </div>
 
-      <p className="mt-1 truncate text-sm text-zinc-800">
-        <span className="font-medium">{order.customerName}</span>
-        <span className="text-zinc-400"> · </span>
-        <span className="text-zinc-600">{formatPhoneDisplay(order.phoneE164)}</span>
-      </p>
-
-      <p className="mt-0.5 text-sm text-zinc-700">{summary}</p>
-
-      {order.notes && (
-        <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
-          {order.notes}
-        </p>
-      )}
-
-      {isDelivery && order.deliveryAddress && (
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-zinc-600">
-          <span className="truncate">{order.deliveryAddress}</span>
-          {order.deliveryDistanceMeters != null && (
-            <span className="shrink-0 text-zinc-400">
-              {(order.deliveryDistanceMeters / 1000).toFixed(1)} km
+      <div className="min-w-0 flex-1 px-3 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-sm text-zinc-500">{timeLabel}</span>
+            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800">
+              {isDelivery ? labels.delivery : labels.pickup}
             </span>
-          )}
-          {mapsUrl && (
-            <Link href={mapsUrl} target="_blank" className="shrink-0 text-orange-600 underline">
-              {labels.openMaps}
-            </Link>
-          )}
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(order.status)}`}
+            >
+              {orderStatusLabel(order.status, lang)}
+            </span>
+          </div>
+          <span className="shrink-0 text-sm font-bold text-zinc-900">{order.totalDisplay}</span>
         </div>
-      )}
 
-      {!readOnly && nextStatus && (
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setStatus(nextStatus)}
-            className="min-h-9 flex-1 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {nextActionLabel(order, nextStatus, labels)}
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={handleCancel}
-            className="min-h-9 shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:text-red-600 disabled:opacity-50"
-          >
-            {labels.cancel}
-          </button>
-        </div>
-      )}
+        <p className="mt-1.5 truncate text-sm">
+          <span className="font-bold text-zinc-950">{order.customerName}</span>
+          <span className="text-zinc-400"> · </span>
+          <span className="font-medium text-zinc-600">{formatPhoneDisplay(order.phoneE164)}</span>
+        </p>
+
+        <ul className="mt-2 space-y-0.5">
+          {order.items.map((item, index) => (
+            <li
+              key={`${item.name}-${index}`}
+              className={`text-base font-bold leading-snug ${inactive ? "text-zinc-600" : "text-zinc-950"}`}
+            >
+              {item.quantity}× {item.name}
+            </li>
+          ))}
+        </ul>
+
+        {order.notes && (
+          <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-sm font-semibold text-amber-950">
+            {order.notes}
+          </p>
+        )}
+
+        {isDelivery && order.deliveryAddress && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-zinc-600">
+            <span className="truncate">{order.deliveryAddress}</span>
+            {order.deliveryDistanceMeters != null && (
+              <span className="shrink-0 text-zinc-400">
+                {(order.deliveryDistanceMeters / 1000).toFixed(1)} km
+              </span>
+            )}
+            {mapsUrl && (
+              <Link href={mapsUrl} target="_blank" className="shrink-0 text-orange-600 underline">
+                {labels.openMaps}
+              </Link>
+            )}
+          </div>
+        )}
+
+        {!readOnly && nextStatus && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setStatus(nextStatus)}
+              className="min-h-9 flex-1 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {nextActionLabel(order, nextStatus, labels)}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleCancel}
+              className="min-h-9 shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-500 hover:border-red-200 hover:text-red-600 disabled:opacity-50"
+            >
+              {labels.cancel}
+            </button>
+          </div>
+        )}
+      </div>
     </article>
   );
 }
