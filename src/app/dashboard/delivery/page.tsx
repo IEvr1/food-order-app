@@ -14,13 +14,11 @@ import {
 import { formatPriceEuros } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { formatSalonTime, localeTagForLang } from "@/lib/timezone";
+import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang } from "@/lib/timezone";
 import { DashboardAutoRefresh } from "@/app/dashboard/dashboard-auto-refresh";
 import { DashboardPwaInstall } from "@/app/dashboard/dashboard-pwa-install";
-import {
-  DeliveryOrdersView,
-  type DeliveryOrderRow,
-} from "@/app/dashboard/delivery/delivery-orders-view";
+import type { DashboardOrderRow } from "@/app/dashboard/dashboard-orders-view";
+import { DeliveryOrdersView } from "@/app/dashboard/delivery/delivery-orders-view";
 
 export default async function DeliveryDashboardPage({
   searchParams,
@@ -37,8 +35,10 @@ export default async function DeliveryDashboardPage({
           today: "Σήμερα",
           empty: "Δεν υπάρχουν παραγγελίες για delivery.",
           back: "← Παραγγελίες",
+          delivery: "Delivery",
+          pickup: "Pickup",
           openMaps: "Άνοιγμα στο Maps",
-          sectionReady: "Για παραλαβή",
+          sectionReady: "Έτοιμα για delivery",
           sectionActive: "Στο δρόμο",
           next_OUT_FOR_DELIVERY: "Στο δρόμο",
           next_COMPLETED: "Ολοκληρώθηκε",
@@ -50,8 +50,10 @@ export default async function DeliveryDashboardPage({
           today: "Today",
           empty: "No delivery orders in the queue.",
           back: "← Orders",
+          delivery: "Delivery",
+          pickup: "Pickup",
           openMaps: "Open in Maps",
-          sectionReady: "Ready for pickup",
+          sectionReady: "Ready for delivery",
           sectionActive: "On the way",
           next_OUT_FOR_DELIVERY: "On the way",
           next_COMPLETED: "Done",
@@ -80,23 +82,30 @@ export default async function DeliveryDashboardPage({
     orderBy: { requestedAt: "asc" },
   });
 
-  const fullRows: DeliveryOrderRow[] = orders.map((order) => ({
-    id: order.id,
-    orderNumber: order.orderNumber,
-    requestedTimeDisplay: formatSalonTime(order.requestedAt, shop.timezone, intlLocale),
-    phoneE164: order.customer.phoneE164,
-    fulfillmentType: "DELIVERY" as const,
-    deliveryAddress: order.deliveryAddress,
-    deliveryLat: order.deliveryLat,
-    deliveryLng: order.deliveryLng,
-    status: order.status,
-    totalDisplay: formatPriceEuros(order.totalCents, intlLocale),
-    notes: order.notes,
-    items: order.items.map((i) => ({
-      name: i.nameSnapshot,
-      quantity: i.quantity,
-    })),
-  }));
+  const fullRows: DashboardOrderRow[] = orders
+    .filter((order) => order.status === "READY" || order.status === "OUT_FOR_DELIVERY")
+    .map((order) => ({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      requestedAtDisplay: formatSalonDateTimeDisplay(order.requestedAt, shop.timezone, intlLocale),
+      requestedTimeDisplay: formatSalonTime(order.requestedAt, shop.timezone, intlLocale),
+      customerName: order.customer.name,
+      phoneE164: order.customer.phoneE164,
+      fulfillmentType: order.fulfillmentType,
+      deliveryAddress: order.deliveryAddress,
+      deliveryLat: order.deliveryLat,
+      deliveryLng: order.deliveryLng,
+      deliveryDistanceMeters: order.deliveryDistanceMeters,
+      status: order.status,
+      totalCents: order.totalCents,
+      totalDisplay: formatPriceEuros(order.totalCents, intlLocale),
+      notes: order.notes,
+      items: order.items.map((i) => ({
+        name: i.nameSnapshot,
+        quantity: i.quantity,
+        lineTotalCents: i.priceCentsSnapshot * i.quantity,
+      })),
+    }));
 
   const activeOrders = fullRows
     .filter((o) => o.status === "OUT_FOR_DELIVERY")
@@ -138,6 +147,8 @@ export default async function DeliveryDashboardPage({
           lang={lang}
           labels={{
             empty: t.empty,
+            delivery: t.delivery,
+            pickup: t.pickup,
             openMaps: t.openMaps,
             sectionReady: t.sectionReady,
             sectionActive: t.sectionActive,

@@ -3,14 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { updateOrderStatusFromDashboard } from "@/app/dashboard/order-actions";
+import {
+  updateOrderStatusFromDashboard,
+  updateOrderStatusFromDelivery,
+} from "@/app/dashboard/order-actions";
 import type { Locale } from "@/lib/locale";
 import { orderStatusLabel } from "@/lib/order-status-label";
 import {
+  getAvailableActions,
   getNextStatus,
   isWaitingForDriver,
   nextActionLabelKey,
   type ActionStatus,
+  type DashboardScope,
 } from "@/lib/order-status-flow";
 import { formatPhoneDisplay } from "@/lib/phone";
 
@@ -95,30 +100,45 @@ export function DashboardOrdersView({
   return (
     <div className="space-y-2">
       {orders.map((order) => (
-        <OrderCard key={order.id} order={order} lang={lang} labels={labels} readOnly={readOnly} />
+        <DashboardOrderCard
+          key={order.id}
+          order={order}
+          lang={lang}
+          labels={labels}
+          readOnly={readOnly}
+        />
       ))}
     </div>
   );
 }
 
-function OrderCard({
+export function DashboardOrderCard({
   order,
   lang,
   labels,
-  readOnly,
+  readOnly = false,
+  scope = "kitchen",
+  deliveryExtras = false,
 }: {
   order: DashboardOrderRow;
   lang: Locale;
   labels: Record<string, string>;
-  readOnly: boolean;
+  readOnly?: boolean;
+  scope?: DashboardScope;
+  deliveryExtras?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const nextStatus = getNextStatus(order, "kitchen");
+  const actions = readOnly ? [] : getAvailableActions(order, scope);
+  const nextStatus = scope === "kitchen" ? getNextStatus(order, scope) : null;
 
   const setStatus = (status: ActionStatus) => {
     startTransition(async () => {
-      await updateOrderStatusFromDashboard({ orderId: order.id, status, lang });
+      if (scope === "delivery") {
+        await updateOrderStatusFromDelivery({ orderId: order.id, status, lang });
+      } else {
+        await updateOrderStatusFromDashboard({ orderId: order.id, status, lang });
+      }
       router.refresh();
     });
   };
@@ -139,7 +159,7 @@ function OrderCard({
   const isDelivery = order.fulfillmentType === "DELIVERY";
   const timeLabel = readOnly ? order.requestedAtDisplay : order.requestedTimeDisplay;
   const inactive = isInactiveStatus(order.status);
-  const waitingForDriver = isWaitingForDriver(order);
+  const waitingForDriver = scope === "kitchen" && isWaitingForDriver(order);
 
   return (
     <article
@@ -207,13 +227,15 @@ function OrderCard({
 
         {isDelivery && order.deliveryAddress && (
           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-zinc-600">
-            <span className="truncate">{order.deliveryAddress}</span>
+            <span className={deliveryExtras ? "text-sm font-semibold text-zinc-900" : "truncate"}>
+              {order.deliveryAddress}
+            </span>
             {order.deliveryDistanceMeters != null && (
               <span className="shrink-0 text-zinc-400">
                 {(order.deliveryDistanceMeters / 1000).toFixed(1)} km
               </span>
             )}
-            {mapsUrl && (
+            {mapsUrl && !deliveryExtras && (
               <Link href={mapsUrl} target="_blank" className="shrink-0 text-orange-600 underline">
                 {labels.openMaps}
               </Link>
@@ -221,7 +243,45 @@ function OrderCard({
           </div>
         )}
 
-        {!readOnly && nextStatus && (
+        {deliveryExtras && isDelivery && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {mapsUrl && (
+              <Link
+                href={mapsUrl}
+                target="_blank"
+                className="inline-flex min-h-10 items-center rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white"
+              >
+                {labels.openMaps}
+              </Link>
+            )}
+            <a
+              href={`tel:${order.phoneE164}`}
+              className="inline-flex min-h-10 items-center rounded-lg border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800"
+            >
+              {formatPhoneDisplay(order.phoneE164)}
+            </a>
+          </div>
+        )}
+
+        {scope === "delivery" && actions.length > 0 && (
+          <div className={`mt-2 flex gap-2 ${actions.length === 1 ? "" : "flex-col sm:flex-row"}`}>
+            {actions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                disabled={pending}
+                onClick={() => setStatus(action)}
+                className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50 ${
+                  action === "COMPLETED" ? "bg-zinc-800" : "bg-orange-600"
+                }`}
+              >
+                {labels[nextActionLabelKey(order, action)] ?? action}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {scope === "kitchen" && !readOnly && nextStatus && (
           <div className="mt-2 flex gap-2">
             <button
               type="button"
