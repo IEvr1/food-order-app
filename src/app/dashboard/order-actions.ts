@@ -9,6 +9,7 @@ import {
   isDashboardMutationAuthorized,
   isDeliveryMutationAuthorized,
 } from "@/lib/dashboard-auth";
+import { computeDeliveryEta } from "@/lib/delivery-eta";
 import { isDeliveryEnabled, validateDeliveryLocation } from "@/lib/delivery-zone";
 import { parseLocale, type Locale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
@@ -130,9 +131,21 @@ async function applyOrderStatusUpdate(
     return { ok: false as const, error: invalidTransitionMessage(lang) };
   }
 
+  let deliveryEta: Awaited<ReturnType<typeof computeDeliveryEta>> = null;
+  if (newStatus === "OUT_FOR_DELIVERY" && order.fulfillmentType === "DELIVERY") {
+    deliveryEta = await computeDeliveryEta({
+      shop: order.shop,
+      delivery: { lat: order.deliveryLat, lng: order.deliveryLng },
+      distanceMeters: order.deliveryDistanceMeters,
+    });
+  }
+
   await prisma.order.update({
     where: { id: order.id },
-    data: { status: newStatus },
+    data: {
+      status: newStatus,
+      ...(deliveryEta ? { estimatedArrivalAt: deliveryEta.estimatedArrivalAt } : {}),
+    },
   });
 
   const messageKind = messageKindFromStatusTransition(
@@ -152,6 +165,8 @@ async function applyOrderStatusUpdate(
       orderNumber: order.orderNumber,
       manageUrl,
       lang,
+      shopTimezone: order.shop.timezone,
+      deliveryEta: deliveryEta ?? undefined,
     });
   }
 

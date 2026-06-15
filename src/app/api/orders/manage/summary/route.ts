@@ -10,7 +10,7 @@ import {
 } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
-import { formatSalonDateTimeDisplay, localeTagForLang } from "@/lib/timezone";
+import { formatSalonDateTimeDisplay, formatSalonTime, localeTagForLang } from "@/lib/timezone";
 
 type OrderWithItems = Order & { items: OrderItem[] };
 
@@ -23,6 +23,11 @@ function serializeOrderSummary(
 ) {
   const uiPhase = orderUiPhase(order, shop, now);
   const manageUntil = getCustomerManageUntil(order, shop);
+  const nowMs = now.getTime();
+  const etaMinutes =
+    order.estimatedArrivalAt != null
+      ? Math.max(1, Math.round((order.estimatedArrivalAt.getTime() - nowMs) / 60_000))
+      : null;
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -33,6 +38,12 @@ function serializeOrderSummary(
     deliveryAddress: order.deliveryAddress,
     deliveryLat: order.deliveryLat,
     deliveryLng: order.deliveryLng,
+    estimatedArrivalAt: order.estimatedArrivalAt?.toISOString() ?? null,
+    estimatedArrivalDisplay:
+      order.estimatedArrivalAt != null
+        ? formatSalonTime(order.estimatedArrivalAt, shopTimezone, locale)
+        : null,
+    etaMinutes,
     subtotalCents: order.subtotalCents,
     totalCents: order.totalCents,
     totalDisplay: formatPriceEuros(order.totalCents, locale),

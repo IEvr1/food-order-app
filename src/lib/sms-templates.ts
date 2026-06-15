@@ -49,13 +49,21 @@ export function buildOrderReadySms(params: OrderSmsBase): string {
   return `${shopName}: Order ${num} is ready for pickup!\n${manageUrl}`;
 }
 
-export function buildOrderOutForDeliverySms(params: OrderSmsBase): string {
-  const { shopName, orderNumber, manageUrl, lang } = params;
+export function buildOrderOutForDeliverySms(
+  params: OrderSmsBase & { etaMinutes?: number; arrivalTime?: string },
+): string {
+  const { shopName, orderNumber, manageUrl, lang, etaMinutes, arrivalTime } = params;
   const num = `#${orderNumber}`;
+  const etaSuffix =
+    etaMinutes != null && arrivalTime
+      ? lang === "el"
+        ? ` Εκτιμώμενη άφιξη σε ~${etaMinutes} λεπτά, στις ${arrivalTime}.`
+        : ` Estimated arrival in ~${etaMinutes} min, by ${arrivalTime}.`
+      : "";
   if (lang === "el") {
-    return `${shopName}: Η παραγγελία ${num} είναι στο δρόμο!\n${manageUrl}`;
+    return `${shopName}: Η παραγγελία ${num} είναι στο δρόμο!${etaSuffix}\n${manageUrl}`;
   }
-  return `${shopName}: Order ${num} is on its way!\n${manageUrl}`;
+  return `${shopName}: Order ${num} is on its way!${etaSuffix}\n${manageUrl}`;
 }
 
 export function buildOrderCancelledSms(params: OrderSmsBase & { when?: SalonSmsWhen }): string {

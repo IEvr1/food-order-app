@@ -117,6 +117,7 @@ model Order {
   status                 OrderStatus     @default(CONFIRMED)
   locale                 String          @default("el")
   notes                  String?
+  estimatedArrivalAt     DateTime?
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
   shop                   Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)

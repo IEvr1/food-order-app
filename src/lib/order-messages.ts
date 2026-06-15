@@ -1,6 +1,7 @@
 import type { FulfillmentType, OrderStatus } from "@prisma/client";
 import type { Locale } from "@/lib/locale";
-import type { SalonSmsWhen } from "@/lib/timezone";
+import type { DeliveryEtaResult } from "@/lib/delivery-eta";
+import { formatSalonTime, type SalonSmsWhen } from "@/lib/timezone";
 import {
   buildOrderCancelledSms,
   buildOrderOutForDeliverySms,
@@ -21,6 +22,8 @@ type StatusSmsBase = {
   manageUrl: string;
   lang: Locale;
   when?: SalonSmsWhen;
+  shopTimezone?: string;
+  deliveryEta?: DeliveryEtaResult;
 };
 
 /**
@@ -69,8 +72,21 @@ export function buildOrderStatusSms(
   switch (kind) {
     case "ORDER_READY_PICKUP":
       return buildOrderReadySms(base);
-    case "ORDER_ON_THE_WAY":
-      return buildOrderOutForDeliverySms(base);
+    case "ORDER_ON_THE_WAY": {
+      const arrivalTime =
+        params.deliveryEta && params.shopTimezone
+          ? formatSalonTime(
+              params.deliveryEta.estimatedArrivalAt,
+              params.shopTimezone,
+              params.lang === "el" ? "el-CY" : "en-GB",
+            )
+          : undefined;
+      return buildOrderOutForDeliverySms({
+        ...base,
+        etaMinutes: params.deliveryEta?.etaMinutes,
+        arrivalTime,
+      });
+    }
     case "ORDER_CANCELLED":
       return buildOrderCancelledSms({ ...base, when: params.when });
   }

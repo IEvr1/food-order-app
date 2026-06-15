@@ -58,6 +58,8 @@ type ManageOrder = {
   canManage: boolean;
   manageUntilDisplay?: string;
   notes: string | null;
+  estimatedArrivalDisplay?: string | null;
+  etaMinutes?: number | null;
 };
 
 type ManageSummary = {
@@ -124,6 +126,9 @@ export default function ChatPage() {
           confirmCancel: "Να ακυρωθεί η παραγγελία;",
           yes: "Ναι",
           no: "Όχι",
+          deliveryEta: (minutes: number, time: string) =>
+            `Εκτιμώμενη άφιξη σε ~${minutes} λεπτά, στις ${time}.`,
+          deliveryEtaTime: (time: string) => `Εκτιμώμενη άφιξη στις ${time}.`,
         }
       : {
           welcome: "Welcome! What would you like to order?",
@@ -163,6 +168,9 @@ export default function ChatPage() {
           confirmCancel: "Cancel this order?",
           yes: "Yes",
           no: "No",
+          deliveryEta: (minutes: number, time: string) =>
+            `Estimated arrival in ~${minutes} min, by ${time}.`,
+          deliveryEtaTime: (time: string) => `Estimated arrival by ${time}.`,
         };
 
   const [shop, setShop] = useState<ShopInfo | null>(null);
@@ -621,6 +629,17 @@ export default function ChatPage() {
                     ? t.manageUntil(manage.order.manageUntilDisplay)
                     : undefined
                 }
+                deliveryEtaLabel={
+                  manage.order.status === "OUT_FOR_DELIVERY" &&
+                  manage.order.estimatedArrivalDisplay
+                    ? manage.order.etaMinutes != null && manage.order.etaMinutes > 0
+                      ? t.deliveryEta(
+                          manage.order.etaMinutes,
+                          manage.order.estimatedArrivalDisplay,
+                        )
+                      : t.deliveryEtaTime(manage.order.estimatedArrivalDisplay)
+                    : undefined
+                }
               />
             )}
             {manage.activeOrders.length > 1 && (
@@ -705,6 +724,7 @@ function OrderCard({
   onCancel,
   cancelLabel,
   manageHint,
+  deliveryEtaLabel,
   compact,
 }: {
   order: ManageOrder;
@@ -712,6 +732,7 @@ function OrderCard({
   onCancel?: () => void;
   cancelLabel?: string;
   manageHint?: string;
+  deliveryEtaLabel?: string;
   compact?: boolean;
 }) {
   return (
@@ -735,6 +756,9 @@ function OrderCard({
       <p className="mt-2 font-semibold text-orange-600">{order.totalDisplay}</p>
       {order.deliveryAddress && (
         <p className="mt-1 text-xs text-zinc-500">{order.deliveryAddress}</p>
+      )}
+      {deliveryEtaLabel && !compact && (
+        <p className="mt-2 text-sm font-medium text-blue-800">{deliveryEtaLabel}</p>
       )}
       {manageHint && !compact && (
         <p className="mt-2 text-xs text-zinc-500">{manageHint}</p>
