@@ -1,46 +1,28 @@
-let audioContext: AudioContext | null = null;
+const SOUND_SRC = "/dashboard-sounds/option-3-soft-marimba.wav";
+
+let audio: HTMLAudioElement | null = null;
 let unlockListenersAttached = false;
 
-async function getAudioContext(): Promise<AudioContext | null> {
+function getAudio(): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
-  if (!audioContext) {
-    audioContext = new AudioContext();
+  if (!audio) {
+    audio = new Audio(SOUND_SRC);
+    audio.preload = "auto";
   }
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
-  }
-  return audioContext;
+  return audio;
 }
 
-function playTone(
-  ctx: AudioContext,
-  frequency: number,
-  startAt: number,
-  duration: number,
-  volume = 0.28,
-) {
-  const oscillator = ctx.createOscillator();
-  const gain = ctx.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.value = frequency;
-  oscillator.connect(gain);
-  gain.connect(ctx.destination);
-  gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-  oscillator.start(startAt);
-  oscillator.stop(startAt + duration + 0.05);
-}
-
-/** Short three-note chime for incoming orders. */
+/** Soft marimba chime for incoming orders. */
 export async function playNewOrderChime(): Promise<void> {
-  const ctx = await getAudioContext();
-  if (!ctx) return;
+  const clip = getAudio();
+  if (!clip) return;
 
-  const t0 = ctx.currentTime + 0.02;
-  playTone(ctx, 523.25, t0, 0.2);
-  playTone(ctx, 659.25, t0 + 0.13, 0.2);
-  playTone(ctx, 783.99, t0 + 0.26, 0.38, 0.32);
+  clip.currentTime = 0;
+  try {
+    await clip.play();
+  } catch {
+    // Blocked until the user interacts with the page.
+  }
 }
 
 /** Browsers block audio until the user interacts with the page. */
@@ -49,7 +31,15 @@ export function unlockDashboardAudio(): void {
   unlockListenersAttached = true;
 
   const unlock = () => {
-    void getAudioContext();
+    const clip = getAudio();
+    if (!clip) return;
+    clip.volume = 1;
+    void clip.play()
+      .then(() => {
+        clip.pause();
+        clip.currentTime = 0;
+      })
+      .catch(() => undefined);
   };
 
   document.addEventListener("pointerdown", unlock, { once: true });
