@@ -72,7 +72,8 @@ The delivery link cannot access owner pages (settings, KPIs, etc.). The owner da
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL (`food_order` or hosted DB) |
-| `APP_BASE_URL` | Public URL for SMS links |
+| `APP_BASE_URL` | Public app URL (`foodorder.nexaipla.com` — chat, dashboard) |
+| `SMS_LINK_BASE_URL` | SMS short links (`orders.nexaipla.com`) |
 | `SMS_LINK_SECRET` | Signs customer manage links |
 | `DASHBOARD_LINK_SECRET` | Signs owner dashboard and delivery links |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Maps + Places for delivery |

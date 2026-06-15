@@ -15,7 +15,6 @@ import {
   DashboardOrdersView,
   type DashboardOrderRow,
 } from "@/app/dashboard/dashboard-orders-view";
-import { DashboardNexalplaLogo } from "@/app/dashboard/dashboard-nexalpla-logo";
 import { isDashboardLinkAuthAvailable } from "@/lib/dashboard-auth";
 
 export default async function DashboardHistoryPage({
@@ -176,7 +175,6 @@ export default async function DashboardHistoryPage({
           }}
         />
       </main>
-      <DashboardNexalplaLogo />
     </div>
   );
 }

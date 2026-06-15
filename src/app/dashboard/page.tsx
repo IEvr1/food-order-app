@@ -168,6 +168,9 @@ export default async function DashboardPage({
   return (
     <div className="min-h-dvh bg-zinc-50">
       <DashboardAutoRefresh />
+      <div className="fixed top-12 right-3 z-40">
+        <DashboardNexalplaLogo />
+      </div>
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 pr-16">
           <div>
@@ -245,7 +248,6 @@ export default async function DashboardPage({
           }}
         />
       </main>
-      <DashboardNexalplaLogo />
     </div>
   );
 }

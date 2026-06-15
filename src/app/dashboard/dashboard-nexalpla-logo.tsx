@@ -3,7 +3,7 @@ export function DashboardNexalplaLogo() {
     <img
       src="/nexalpla-logo.png"
       alt="NexAlpla"
-      className="mt-1.5 h-[1.4375rem] w-auto opacity-50"
+      className="h-[2.25rem] w-auto opacity-50"
     />
   );
 }
