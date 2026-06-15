@@ -1,11 +1,5 @@
-import Link from "next/link";
-import { cookies } from "next/headers";
 import { ensureShopSeed } from "@/lib/bootstrap";
-import {
-  DASHBOARD_ACCESS_COOKIE,
-  isDashboardLinkAuthAvailable,
-  verifyDashboardAccessCode,
-} from "@/lib/dashboard-auth";
+import { isDashboardLinkAuthAvailable } from "@/lib/dashboard-auth";
 import {
   deliveryQueueWhere,
   resolveTodayDashboardDateRange,
@@ -34,7 +28,6 @@ export default async function DeliveryDashboardPage({
           title: "Delivery",
           today: "Σήμερα",
           empty: "Δεν υπάρχουν παραγγελίες για delivery.",
-          back: "← Παραγγελίες",
           delivery: "Delivery",
           pickup: "Pickup",
           openMaps: "Άνοιγμα στο Maps",
@@ -49,7 +42,6 @@ export default async function DeliveryDashboardPage({
           title: "Delivery",
           today: "Today",
           empty: "No delivery orders in the queue.",
-          back: "← Orders",
           delivery: "Delivery",
           pickup: "Pickup",
           openMaps: "Open in Maps",
@@ -66,11 +58,6 @@ export default async function DeliveryDashboardPage({
   if (!shop) {
     return <p>No shop configured.</p>;
   }
-
-  const cookieStore = await cookies();
-  const hasOwnerAccess = Boolean(
-    await verifyDashboardAccessCode(cookieStore.get(DASHBOARD_ACCESS_COOKIE)?.value),
-  );
 
   const { from, to } = resolveTodayDashboardDateRange(shop.timezone);
   const { start, endExclusive } = salonLocalDateRangeBoundsUtc(from, to, shop.timezone);
@@ -118,21 +105,11 @@ export default async function DeliveryDashboardPage({
     <div className="min-h-dvh bg-zinc-50">
       <DashboardAutoRefresh />
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
-        <div className="mx-auto flex max-w-lg items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-zinc-900">{shop.name}</h1>
-            <p className="text-sm text-zinc-500">
-              {t.title} · {t.today}
-            </p>
-          </div>
-          {hasOwnerAccess && (
-            <Link
-              href={`/dashboard?lang=${lang}`}
-              className="shrink-0 text-sm text-orange-600 underline"
-            >
-              {t.back}
-            </Link>
-          )}
+        <div className="mx-auto max-w-lg">
+          <h1 className="text-xl font-bold text-zinc-900">{shop.name}</h1>
+          <p className="text-sm text-zinc-500">
+            {t.title} · {t.today}
+          </p>
         </div>
       </header>
 
