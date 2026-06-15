@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!canCustomerManageOrder(order.status)) {
+  if (!canCustomerManageOrder(order, order.shop)) {
     return NextResponse.json({ error: "Order cannot be modified" }, { status: 409 });
   }
 

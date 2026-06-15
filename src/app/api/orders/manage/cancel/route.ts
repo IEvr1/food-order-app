@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!canCustomerManageOrder(order.status)) {
+  if (!canCustomerManageOrder(order, order.shop)) {
     return NextResponse.json(
       { error: lang === "el" ? "Η παραγγελία δεν μπορεί πλέον να ακυρωθεί." : "Order can no longer be cancelled." },
       { status: 409 },

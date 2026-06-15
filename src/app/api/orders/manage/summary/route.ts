@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import type { Order, OrderItem } from "@prisma/client";
+import type { Order, OrderItem, Shop } from "@prisma/client";
 import { getManageSessionPayload } from "@/lib/manage-from-request";
 import {
   canCustomerManageOrder,
   formatPriceEuros,
+  getCustomerManageUntil,
   orderUiPhase,
   serializeOrderItems,
 } from "@/lib/order";
@@ -16,10 +17,12 @@ type OrderWithItems = Order & { items: OrderItem[] };
 function serializeOrderSummary(
   order: OrderWithItems,
   now: Date,
+  shop: Pick<Shop, "prepMinutes" | "deliveryPrepMinutes">,
   shopTimezone: string,
   locale: string,
 ) {
-  const uiPhase = orderUiPhase(order, now);
+  const uiPhase = orderUiPhase(order, shop, now);
+  const manageUntil = getCustomerManageUntil(order, shop);
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -36,7 +39,9 @@ function serializeOrderSummary(
     notes: order.notes,
     items: serializeOrderItems(order.items),
     uiPhase,
-    canManage: canCustomerManageOrder(order.status),
+    canManage: canCustomerManageOrder(order, shop, now),
+    manageUntil: manageUntil.toISOString(),
+    manageUntilDisplay: formatSalonDateTimeDisplay(manageUntil, shopTimezone, locale),
   };
 }
 
@@ -86,13 +91,13 @@ export async function GET(request: Request) {
     ? await loadOrderHistory(customer.id, session.shopId)
     : [];
   const orderHistory = orderHistoryRows.map((o) =>
-    serializeOrderSummary(o, now, shop.timezone, intlLocale),
+    serializeOrderSummary(o, now, shop, shop.timezone, intlLocale),
   );
 
   if (!session.orderId) {
     const activeRows = customer ? await loadActiveOrders(customer.id, session.shopId, now) : [];
     const activeOrders = activeRows.map((o) =>
-      serializeOrderSummary(o, now, shop.timezone, intlLocale),
+      serializeOrderSummary(o, now, shop, shop.timezone, intlLocale),
     );
     return NextResponse.json({
       shopName: shop.name,
@@ -122,7 +127,7 @@ export async function GET(request: Request) {
 
   const activeRows = await loadActiveOrders(order.customerId, session.shopId, now);
   const activeOrders = activeRows.map((o) =>
-    serializeOrderSummary(o, now, shop.timezone, intlLocale),
+    serializeOrderSummary(o, now, shop, shop.timezone, intlLocale),
   );
 
   return NextResponse.json({
@@ -130,9 +135,9 @@ export async function GET(request: Request) {
     shopTimezone: shop.timezone,
     customerName: order.customer.name,
     customerPhone: order.customer.phoneE164,
-    order: serializeOrderSummary(order, now, shop.timezone, intlLocale),
-    uiPhase: orderUiPhase(order, now),
-    canManage: canCustomerManageOrder(order.status),
+    order: serializeOrderSummary(order, now, shop, shop.timezone, intlLocale),
+    uiPhase: orderUiPhase(order, shop, now),
+    canManage: canCustomerManageOrder(order, shop, now),
     activeOrders,
     orderHistory,
   });

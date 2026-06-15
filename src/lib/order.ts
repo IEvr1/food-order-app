@@ -13,6 +13,9 @@ import {
 
 export const DEFAULT_PREP_BUFFER_MINUTES = 25;
 export const DEFAULT_DELIVERY_PREP_BUFFER_MINUTES = 45;
+export const CUSTOMER_MODIFY_GRACE_MINUTES = 4;
+/** ASAP orders set requestedAt at submit; scheduled slots are at least prepMinutes ahead. */
+const ASAP_ORDER_THRESHOLD_MS = 2 * 60 * 1000;
 /** @deprecated Use shop.prepMinutes or prepBufferMinutes(shop, type) */
 export const PREP_BUFFER_MINUTES = DEFAULT_PREP_BUFFER_MINUTES;
 /** @deprecated Use shop.deliveryPrepMinutes or prepBufferMinutes(shop, type) */
@@ -206,20 +209,52 @@ export async function validateRequestedAtTime(params: {
   return { ok: true };
 }
 
-export function canCustomerManageOrder(status: string): boolean {
-  return status === "PENDING" || status === "CONFIRMED";
+export type CustomerManageOrder = {
+  status: string;
+  requestedAt: Date;
+  createdAt: Date;
+  fulfillmentType: string;
+};
+
+export function isAsapOrder(order: Pick<CustomerManageOrder, "requestedAt" | "createdAt">): boolean {
+  return order.requestedAt.getTime() - order.createdAt.getTime() < ASAP_ORDER_THRESHOLD_MS;
+}
+
+export function getCustomerManageUntil(
+  order: Pick<CustomerManageOrder, "requestedAt" | "createdAt" | "fulfillmentType">,
+  shop: ShopPrepTimes,
+): Date {
+  if (isAsapOrder(order)) {
+    return addMinutes(order.createdAt, CUSTOMER_MODIFY_GRACE_MINUTES);
+  }
+  const prep = prepBufferMinutes(shop, order.fulfillmentType as "PICKUP" | "DELIVERY");
+  return addMinutes(order.requestedAt, -prep);
+}
+
+export function canCustomerManageOrder(
+  order: CustomerManageOrder,
+  shop: ShopPrepTimes,
+  now: Date = new Date(),
+): boolean {
+  if (order.status !== "PENDING" && order.status !== "CONFIRMED") {
+    return false;
+  }
+  return now < getCustomerManageUntil(order, shop);
 }
 
 export function orderUiPhase(
-  order: { status: string; requestedAt: Date },
+  order: CustomerManageOrder,
+  shop: ShopPrepTimes,
   now: Date,
-): "manageable" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled" {
+): "manageable" | "confirmed" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled" {
   if (order.status === "CANCELLED") return "cancelled";
   if (order.status === "COMPLETED") return "completed";
   if (order.status === "OUT_FOR_DELIVERY") return "out_for_delivery";
   if (order.status === "READY") return "ready";
   if (order.status === "PREPARING") return "preparing";
-  if (canCustomerManageOrder(order.status)) return "manageable";
+  if (order.status === "PENDING" || order.status === "CONFIRMED") {
+    return canCustomerManageOrder(order, shop, now) ? "manageable" : "confirmed";
+  }
   return "completed";
 }
 

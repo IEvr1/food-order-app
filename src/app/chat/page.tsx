@@ -56,6 +56,7 @@ type ManageOrder = {
   items: OrderSummaryItem[];
   uiPhase: string;
   canManage: boolean;
+  manageUntilDisplay?: string;
   notes: string | null;
 };
 
@@ -109,6 +110,7 @@ export default function ChatPage() {
           newOrder: "Νέα παραγγελία",
           manageTitle: "Η παραγγελία σας",
           cancel: "Ακύρωση παραγγελίας",
+          manageUntil: (when: string) => `Μπορείτε να αλλάξετε ή να ακυρώσετε μέχρι ${when}.`,
           history: "Ιστορικό (4 τελευταίες)",
           active: "Ενεργές παραγγελίες",
           status: "Κατάσταση",
@@ -147,6 +149,7 @@ export default function ChatPage() {
           newOrder: "New order",
           manageTitle: "Your order",
           cancel: "Cancel order",
+          manageUntil: (when: string) => `You can change or cancel until ${when}.`,
           history: "History (last 4)",
           active: "Active orders",
           status: "Status",
@@ -613,6 +616,11 @@ export default function ChatPage() {
                 statusLabel={statusLabel(manage.order.status)}
                 onCancel={manage.order.canManage ? () => void cancelOrder() : undefined}
                 cancelLabel={t.cancel}
+                manageHint={
+                  manage.order.canManage && manage.order.manageUntilDisplay
+                    ? t.manageUntil(manage.order.manageUntilDisplay)
+                    : undefined
+                }
               />
             )}
             {manage.activeOrders.length > 1 && (
@@ -696,12 +704,14 @@ function OrderCard({
   statusLabel,
   onCancel,
   cancelLabel,
+  manageHint,
   compact,
 }: {
   order: ManageOrder;
   statusLabel: string;
   onCancel?: () => void;
   cancelLabel?: string;
+  manageHint?: string;
   compact?: boolean;
 }) {
   return (
@@ -725,6 +735,9 @@ function OrderCard({
       <p className="mt-2 font-semibold text-orange-600">{order.totalDisplay}</p>
       {order.deliveryAddress && (
         <p className="mt-1 text-xs text-zinc-500">{order.deliveryAddress}</p>
+      )}
+      {manageHint && !compact && (
+        <p className="mt-2 text-xs text-zinc-500">{manageHint}</p>
       )}
       {onCancel && cancelLabel && (
         <button
