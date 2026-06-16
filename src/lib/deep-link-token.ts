@@ -62,20 +62,22 @@ export async function createDeepLinkToken(
 
   if (reusable?.shortCode) {
     const remainingSec = Math.max(1, Math.floor((reusable.expiresAt.getTime() - now) / 1000));
+    const effectiveTtl = Math.max(remainingSec, ttlSeconds);
+    const expiresAt = new Date(now + effectiveTtl * 1000);
     const jti = crypto.randomUUID();
     const signed = jwt.sign({ ...payload, jti }, smsLinkSigningSecret(), {
-      expiresIn: remainingSec,
+      expiresIn: effectiveTtl,
     });
     const tokenHash = crypto.createHash("sha256").update(signed).digest("hex");
     await prisma.smsLinkToken.update({
       where: { id: reusable.id },
-      data: { tokenHash },
+      data: { tokenHash, expiresAt },
     });
     return {
       token: signed,
       shortCode: reusable.shortCode,
-      expiresAt: reusable.expiresAt,
-      ttlSeconds: remainingSec,
+      expiresAt,
+      ttlSeconds: effectiveTtl,
     };
   }
 
@@ -123,7 +125,7 @@ export async function verifyDeepLinkToken(token: string) {
     throw new Error("Token invalid or expired");
   }
 
-  return decoded;
+  return { ...decoded, linkExpiresAt: record.expiresAt };
 }
 
 export async function resolveManagePayloadByShortCode(
@@ -143,4 +145,11 @@ export async function resolveManagePayloadByShortCode(
     orderId: record.orderId ?? undefined,
     linkExpiresAt: record.expiresAt,
   };
+}
+
+export function manageLinkRemainingSeconds(linkExpiresAt: Date): number {
+  return Math.max(
+    MIN_TOKEN_TTL_SECONDS,
+    Math.min(MAX_TOKEN_TTL_SECONDS, Math.floor((linkExpiresAt.getTime() - Date.now()) / 1000)),
+  );
 }

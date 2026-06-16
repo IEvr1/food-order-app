@@ -19,7 +19,7 @@ import {
 } from "@/lib/order-messages";
 import { canTransition, type DashboardScope } from "@/lib/order-status-flow";
 import { sendBookingSms } from "@/lib/sms";
-import { createSmsManageUrl } from "@/lib/sms-templates";
+import { createOrderManageUrl } from "@/lib/sms-templates";
 
 const statusSchema = z.object({
   orderId: z.string(),
@@ -155,10 +155,16 @@ async function applyOrderStatusUpdate(
   );
   let message: string | null = null;
   if (messageKind) {
-    const manageUrl = await createSmsManageUrl({
+    const manageUrl = await createOrderManageUrl({
       shopId: order.shopId,
       phoneE164: order.customer.phoneE164,
       orderId: order.id,
+      order: {
+        ...order,
+        estimatedArrivalAt: deliveryEta?.estimatedArrivalAt ?? order.estimatedArrivalAt,
+      },
+      shop: order.shop,
+      purpose: "status",
     });
     message = buildOrderStatusSms(messageKind, {
       shopName: order.shop.name,

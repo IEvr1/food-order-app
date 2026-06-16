@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DeliveryLocationPicker,
   type DeliveryLocation,
@@ -57,6 +57,7 @@ type ManageOrder = {
   items: OrderSummaryItem[];
   uiPhase: string;
   canManage: boolean;
+  manageUntil?: string;
   manageUntilDisplay?: string;
   notes: string | null;
   estimatedArrivalDisplay?: string | null;
@@ -65,10 +66,10 @@ type ManageOrder = {
 
 type ManageSummary = {
   shopName: string;
-  customerName: string | null;
   order: ManageOrder | null;
   uiPhase: string;
   canManage: boolean;
+  linkIntent?: "manage" | "view" | "reorder";
   activeOrders: ManageOrder[];
   orderHistory: ManageOrder[];
 };
@@ -111,6 +112,12 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           manageTitle: "Η παραγγελία σας",
           cancel: "Ακύρωση παραγγελίας",
           manageUntil: (when: string) => `Μπορείτε να αλλάξετε ή να ακυρώσετε μέχρι ${when}.`,
+          manageCountdown: (time: string) => `Χρόνος για αλλαγή/ακύρωση: ${time}`,
+          manageClosed:
+            "Η παραγγελία επιβεβαιώθηκε. Δεν μπορεί πλέον να τροποποιηθεί ή να ακυρωθεί.",
+          viewOnly: "Μπορείτε να δείτε την κατάσταση της παραγγελίας σας.",
+          linkExpired: "Ο σύνδεσμος έληξε. Μπορείτε να κάνετε νέα παραγγελία από το μενού.",
+          cancelledHint: "Η παραγγελία ακυρώθηκε. Μπορείτε να κάνετε νέα παραγγελία.",
           history: "Ιστορικό (4 τελευταίες)",
           active: "Ενεργές παραγγελίες",
           status: "Κατάσταση",
@@ -153,6 +160,11 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           manageTitle: "Your order",
           cancel: "Cancel order",
           manageUntil: (when: string) => `You can change or cancel until ${when}.`,
+          manageCountdown: (time: string) => `Time to change or cancel: ${time}`,
+          manageClosed: "Your order is confirmed and can no longer be changed or cancelled.",
+          viewOnly: "You can view your order status here.",
+          linkExpired: "This link has expired. You can place a new order from the menu.",
+          cancelledHint: "This order was cancelled. You can place a new order.",
           history: "History (last 4)",
           active: "Active orders",
           status: "Status",
@@ -193,6 +205,7 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
     isScheduled: boolean;
   } | null>(null);
   const [manage, setManage] = useState<ManageSummary | null>(null);
+  const [linkNotice, setLinkNotice] = useState<string | null>(null);
 
   const localeTag = locale === "el" ? "el-GR" : "en-US";
 
@@ -218,9 +231,24 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
   }, []);
 
   const loadManage = useCallback(async () => {
+    const fromLink =
+      typeof window !== "undefined" &&
+      new URL(window.location.href).searchParams.get("fromLink") === "1";
+
     const res = await fetch(`/api/orders/manage/summary?lang=${locale}`);
     if (res.status === 401) {
       setManage(null);
+      if (fromLink) {
+        setLinkNotice(
+          locale === "el"
+            ? "Ο σύνδεσμος έληξε. Μπορείτε να κάνετε νέα παραγγελία από το μενού."
+            : "This link has expired. You can place a new order from the menu.",
+        );
+        setStep("menu");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("fromLink");
+        window.history.replaceState({}, "", url.toString());
+      }
       return;
     }
     if (res.ok) {
@@ -228,6 +256,13 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
       setManage(data);
       if (data.order || data.activeOrders?.length) {
         setStep("manage");
+      } else if (fromLink) {
+        setStep("menu");
+      }
+      if (fromLink) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("fromLink");
+        window.history.replaceState({}, "", url.toString());
       }
     }
   }, [locale]);
@@ -378,6 +413,11 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
       </header>
 
       <main className="flex-1 px-4 py-4 pb-28">
+        {linkNotice && step === "menu" && (
+          <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-100">
+            {linkNotice}
+          </p>
+        )}
         {step === "menu" && (
           <>
             <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
@@ -619,17 +659,38 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
         {step === "manage" && manage && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold">{t.manageTitle}</h2>
+            {manage.order && manage.linkIntent === "view" && (
+              <p className="rounded-xl bg-blue-50 px-3 py-2.5 text-sm text-blue-900 ring-1 ring-blue-100">
+                {manage.order.status === "CONFIRMED" || manage.order.status === "PENDING"
+                  ? t.manageClosed
+                  : t.viewOnly}
+              </p>
+            )}
+            {manage.order && manage.linkIntent === "reorder" && manage.order.status === "CANCELLED" && (
+              <p className="rounded-xl bg-zinc-50 px-3 py-2.5 text-sm text-zinc-700 ring-1 ring-zinc-200">
+                {t.cancelledHint}
+              </p>
+            )}
+            {manage.order && manage.order.canManage && manage.order.manageUntil && (
+              <ManageCountdown
+                manageUntil={manage.order.manageUntil}
+                label={t.manageCountdown}
+                locale={locale}
+                deadlineDisplay={
+                  manage.order.manageUntilDisplay
+                    ? t.manageUntil(manage.order.manageUntilDisplay)
+                    : undefined
+                }
+                onExpired={() => void loadManage()}
+              />
+            )}
             {manage.order && (
               <OrderCard
                 order={manage.order}
                 statusLabel={statusLabel(manage.order.status)}
                 onCancel={manage.order.canManage ? () => void cancelOrder() : undefined}
                 cancelLabel={t.cancel}
-                manageHint={
-                  manage.order.canManage && manage.order.manageUntilDisplay
-                    ? t.manageUntil(manage.order.manageUntilDisplay)
-                    : undefined
-                }
+                manageHint={undefined}
                 deliveryEtaLabel={
                   manage.order.status === "OUT_FOR_DELIVERY" &&
                   manage.order.estimatedArrivalDisplay
@@ -715,6 +776,81 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           {t.privacy}
         </Link>
       </footer>
+    </div>
+  );
+}
+
+function formatManageCountdown(remainingMs: number, locale: Locale): string {
+  const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+
+  if (days > 0) {
+    return locale === "el"
+      ? `${days}η ${hours}ω ${minutes}λ`
+      : `${days}d ${hours}h ${minutes}m`;
+  }
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function ManageCountdown({
+  manageUntil,
+  label,
+  deadlineDisplay,
+  locale,
+  onExpired,
+}: {
+  manageUntil: string;
+  label: (time: string) => string;
+  deadlineDisplay?: string;
+  locale: Locale;
+  onExpired: () => void;
+}) {
+  const [remainingMs, setRemainingMs] = useState(() =>
+    Math.max(0, new Date(manageUntil).getTime() - Date.now()),
+  );
+  const expiredRef = useRef(false);
+
+  useEffect(() => {
+    expiredRef.current = false;
+    const tick = () => {
+      const ms = Math.max(0, new Date(manageUntil).getTime() - Date.now());
+      setRemainingMs(ms);
+      if (ms === 0 && !expiredRef.current) {
+        expiredRef.current = true;
+        onExpired();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [manageUntil, onExpired]);
+
+  if (remainingMs <= 0) {
+    return null;
+  }
+
+  const urgent = remainingMs <= 60_000;
+
+  return (
+    <div
+      className={`rounded-xl px-3 py-2.5 text-sm ring-1 ${
+        urgent
+          ? "bg-red-50 font-semibold text-red-800 ring-red-200"
+          : "bg-orange-50 text-orange-900 ring-orange-100"
+      }`}
+    >
+      <p>{label(formatManageCountdown(remainingMs, locale))}</p>
+      {deadlineDisplay && (
+        <p className={`mt-0.5 text-xs ${urgent ? "text-red-700" : "text-orange-800/80"}`}>
+          {deadlineDisplay}
+        </p>
+      )}
     </div>
   );
 }

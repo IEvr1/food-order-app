@@ -309,10 +309,11 @@ async function testOrderFlowAndDataSegregation() {
     return;
   }
   const summary = await summaryRes.json();
-  if (summary.customerPhone?.includes(testPhone.slice(-6)) || summary.customerPhone?.includes("+357")) {
-    pass("Integration: summary returns own customer phone only");
+  const summaryText = JSON.stringify(summary);
+  if (/customerPhone|phoneE164|"phone"/i.test(summaryText)) {
+    fail("Integration: manage summary must not expose phone numbers");
   } else {
-    fail("Integration: summary phone mismatch", summary.customerPhone);
+    pass("Integration: manage summary does not expose phone numbers");
   }
 
   if (summary.order?.orderNumber === order.orderNumber) {

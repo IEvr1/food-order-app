@@ -5,6 +5,7 @@ import {
   canCustomerManageOrder,
   formatPriceEuros,
   getCustomerManageUntil,
+  getManageLinkIntent,
   orderUiPhase,
   serializeOrderItems,
 } from "@/lib/order";
@@ -36,8 +37,6 @@ function serializeOrderSummary(
     status: order.status,
     fulfillmentType: order.fulfillmentType,
     deliveryAddress: order.deliveryAddress,
-    deliveryLat: order.deliveryLat,
-    deliveryLng: order.deliveryLng,
     estimatedArrivalAt: order.estimatedArrivalAt?.toISOString() ?? null,
     estimatedArrivalDisplay:
       order.estimatedArrivalAt != null
@@ -113,11 +112,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       shopName: shop.name,
       shopTimezone: shop.timezone,
-      customerName: customer?.name ?? null,
-      customerPhone: session.phoneE164,
       order: null,
       uiPhase: "no_order" as const,
       canManage: false,
+      linkIntent: "reorder" as const,
       activeOrders,
       orderHistory,
     });
@@ -141,14 +139,15 @@ export async function GET(request: Request) {
     serializeOrderSummary(o, now, shop, shop.timezone, intlLocale),
   );
 
+  const canManage = canCustomerManageOrder(order, shop, now);
+
   return NextResponse.json({
     shopName: shop.name,
     shopTimezone: shop.timezone,
-    customerName: order.customer.name,
-    customerPhone: order.customer.phoneE164,
     order: serializeOrderSummary(order, now, shop, shop.timezone, intlLocale),
     uiPhase: orderUiPhase(order, shop, now),
-    canManage: canCustomerManageOrder(order, shop, now),
+    canManage,
+    linkIntent: getManageLinkIntent(order, shop, now, canManage),
     activeOrders,
     orderHistory,
   });

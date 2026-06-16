@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getManageSessionPayload } from "@/lib/manage-from-request";
-import { canCustomerManageOrder } from "@/lib/order";
+import { canCustomerManageOrder, MANAGE_LINK_TERMINAL_SECONDS } from "@/lib/order";
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import { buildOrderStatusSms } from "@/lib/order-messages";
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     shopId: order.shopId,
     phoneE164: order.customer.phoneE164,
     request,
+    ttlSeconds: MANAGE_LINK_TERMINAL_SECONDS,
   });
 
   const when = smsWhenFromInstant(order.requestedAt, order.shop.timezone, lang);

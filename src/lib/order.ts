@@ -1,4 +1,4 @@
-import { addMinutes } from "date-fns";
+import { addHours, addMinutes } from "date-fns";
 import type { Shop } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isShopClosedOnLocalDate } from "@/lib/shop-closure";
@@ -14,6 +14,11 @@ import {
 export const DEFAULT_PREP_BUFFER_MINUTES = 25;
 export const DEFAULT_DELIVERY_PREP_BUFFER_MINUTES = 45;
 export const CUSTOMER_MODIFY_GRACE_MINUTES = 4;
+export const MANAGE_LINK_VIEW_BUFFER_MINUTES = 120;
+export const MANAGE_LINK_ACTIVE_STATUS_HOURS = 24;
+export const MANAGE_LINK_TERMINAL_SECONDS = 30 * 60;
+export const MANAGE_LINK_MIN_SECONDS = 60;
+export const MANAGE_LINK_MAX_SECONDS = 7 * 24 * 60 * 60;
 /** ASAP orders set requestedAt at submit; scheduled slots are at least prepMinutes ahead. */
 const ASAP_ORDER_THRESHOLD_MS = 2 * 60 * 1000;
 /** @deprecated Use shop.prepMinutes or prepBufferMinutes(shop, type) */
@@ -240,6 +245,73 @@ export function canCustomerManageOrder(
     return false;
   }
   return now < getCustomerManageUntil(order, shop);
+}
+
+export type ManageLinkPurpose = "confirm" | "modify" | "status" | "reorder";
+
+export type ManageLinkIntent = "manage" | "view" | "reorder";
+
+export function getManageLinkIntent(
+  order: Pick<CustomerManageOrder, "status"> | null,
+  shop: ShopPrepTimes,
+  now: Date = new Date(),
+  canManage?: boolean,
+): ManageLinkIntent {
+  if (!order) return "reorder";
+  if (order.status === "CANCELLED" || order.status === "COMPLETED") return "reorder";
+  if (canManage ?? canCustomerManageOrder(order as CustomerManageOrder, shop, now)) {
+    return "manage";
+  }
+  if (
+    order.status === "PENDING" ||
+    order.status === "CONFIRMED" ||
+    order.status === "PREPARING" ||
+    order.status === "READY" ||
+    order.status === "OUT_FOR_DELIVERY"
+  ) {
+    return "view";
+  }
+  return "reorder";
+}
+
+export type ManageLinkOrder = CustomerManageOrder & {
+  status: string;
+  estimatedArrivalAt?: Date | null;
+};
+
+function clampManageLinkTtlSeconds(seconds: number): number {
+  return Math.min(
+    MANAGE_LINK_MAX_SECONDS,
+    Math.max(MANAGE_LINK_MIN_SECONDS, Math.floor(seconds)),
+  );
+}
+
+/** SMS manage-link TTL aligned with edit window and post-edit status viewing. */
+export function getManageLinkTtlSeconds(
+  order: ManageLinkOrder,
+  shop: ShopPrepTimes,
+  purpose: ManageLinkPurpose = "confirm",
+  now: Date = new Date(),
+): number {
+  if (purpose === "reorder" || order.status === "CANCELLED" || order.status === "COMPLETED") {
+    return MANAGE_LINK_TERMINAL_SECONDS;
+  }
+
+  if (order.status === "PENDING" || order.status === "CONFIRMED") {
+    const expiresAt = addMinutes(
+      getCustomerManageUntil(order, shop),
+      MANAGE_LINK_VIEW_BUFFER_MINUTES,
+    );
+    return clampManageLinkTtlSeconds((expiresAt.getTime() - now.getTime()) / 1000);
+  }
+
+  let expiresAt: Date;
+  if (order.status === "OUT_FOR_DELIVERY" && order.estimatedArrivalAt) {
+    expiresAt = addMinutes(order.estimatedArrivalAt, MANAGE_LINK_VIEW_BUFFER_MINUTES);
+  } else {
+    expiresAt = addHours(now, MANAGE_LINK_ACTIVE_STATUS_HOURS);
+  }
+  return clampManageLinkTtlSeconds((expiresAt.getTime() - now.getTime()) / 1000);
 }
 
 export function orderUiPhase(

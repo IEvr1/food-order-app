@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyDeepLinkToken } from "@/lib/deep-link-token";
+import { verifyDeepLinkToken, manageLinkRemainingSeconds } from "@/lib/deep-link-token";
 import { isLinkPreviewBot } from "@/lib/link-preview-bot";
 import { MANAGE_SESSION_COOKIE, signManageSessionCookieValue } from "@/lib/manage-session";
 import { prisma } from "@/lib/prisma";
@@ -27,11 +27,16 @@ export async function GET(request: Request, { params }: RouteParams) {
       return smsLinkPreviewResponse(title);
     }
 
-    const session = signManageSessionCookieValue({
-      shopId: decoded.shopId,
-      phoneE164: decoded.phoneE164,
-      orderId: decoded.orderId,
-    });
+    const remainingSec = manageLinkRemainingSeconds(decoded.linkExpiresAt);
+
+    const session = signManageSessionCookieValue(
+      {
+        shopId: decoded.shopId,
+        phoneE164: decoded.phoneE164,
+        orderId: decoded.orderId,
+      },
+      remainingSec,
+    );
 
     const url = new URL("/chat", base);
     url.searchParams.set("fromLink", "1");
@@ -42,7 +47,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 30 * 60,
+      maxAge: remainingSec,
     });
     return res;
   } catch {

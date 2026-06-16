@@ -7,6 +7,7 @@ import type { Locale } from "@/lib/locale";
 import { isDashboardMutationAuthorized } from "@/lib/dashboard-auth";
 import { prisma } from "@/lib/prisma";
 import { buildOrderStatusSms } from "@/lib/order-messages";
+import { MANAGE_LINK_TERMINAL_SECONDS } from "@/lib/order";
 import { sendBookingSms } from "@/lib/sms";
 import { createSmsManageUrl, resolveOrderLocale } from "@/lib/sms-templates";
 import { salonLocalDayBoundsUtc } from "@/lib/timezone";
@@ -62,7 +63,7 @@ export async function emergencyCancelDayAndNotify(isoDate: string, lang: Locale)
     const manageUrl = await createSmsManageUrl({
       shopId: shop.id,
       phoneE164: order.customer.phoneE164,
-      orderId: order.id,
+      ttlSeconds: MANAGE_LINK_TERMINAL_SECONDS,
     });
     const message = buildOrderStatusSms("ORDER_CANCELLED", {
       shopName: shop.name,

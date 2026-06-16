@@ -15,7 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { sendBookingSms } from "@/lib/sms";
 import {
   buildOrderConfirmedSms,
-  createSmsManageUrl,
+  createOrderManageUrl,
   smsWhenFromInstant,
 } from "@/lib/sms-templates";
 import { zonedWallTimeToUtc } from "@/lib/timezone";
@@ -224,10 +224,13 @@ export async function POST(request: Request) {
     include: { items: true },
   });
 
-  const manageUrl = await createSmsManageUrl({
+  const manageUrl = await createOrderManageUrl({
     shopId: shop.id,
     phoneE164,
     orderId: order.id,
+    order,
+    shop,
+    purpose: "confirm",
     request,
   });
 

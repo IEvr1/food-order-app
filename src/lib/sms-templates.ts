@@ -3,6 +3,12 @@ import type { Locale } from "@/lib/locale";
 import { parseLocale } from "@/lib/locale";
 import { createDeepLinkToken } from "@/lib/deep-link-token";
 import { getSmsLinkBaseUrl } from "@/lib/sms-link-base";
+import {
+  getManageLinkTtlSeconds,
+  type ManageLinkOrder,
+  type ManageLinkPurpose,
+  type ShopPrepTimes,
+} from "@/lib/order";
 import { formatSalonSmsWhen, type SalonSmsWhen } from "@/lib/timezone";
 
 export function resolveOrderLocale(locale?: string | null): Locale {
@@ -109,4 +115,27 @@ export async function createSmsManageUrl(params: {
   );
   const base = getSmsLinkBaseUrl(params.request);
   return `${base}/l/${shortCode}`;
+}
+
+export async function createOrderManageUrl(params: {
+  shopId: string;
+  phoneE164: string;
+  order: ManageLinkOrder;
+  shop: ShopPrepTimes;
+  orderId?: string;
+  purpose?: ManageLinkPurpose;
+  request?: Request;
+}): Promise<string> {
+  const ttlSeconds = getManageLinkTtlSeconds(
+    params.order,
+    params.shop,
+    params.purpose ?? "confirm",
+  );
+  return createSmsManageUrl({
+    shopId: params.shopId,
+    phoneE164: params.phoneE164,
+    orderId: params.orderId,
+    request: params.request,
+    ttlSeconds,
+  });
 }

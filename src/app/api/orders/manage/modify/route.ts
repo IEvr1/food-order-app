@@ -11,7 +11,7 @@ import {
 import { parseLocale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import { sendBookingSms } from "@/lib/sms";
-import { buildOrderModifiedSms, createSmsManageUrl } from "@/lib/sms-templates";
+import { buildOrderModifiedSms, createOrderManageUrl } from "@/lib/sms-templates";
 import { zonedWallTimeToUtc } from "@/lib/timezone";
 
 const cartLineSchema = z.object({
@@ -150,10 +150,13 @@ export async function POST(request: Request) {
     }),
   ]);
 
-  const manageUrl = await createSmsManageUrl({
+  const manageUrl = await createOrderManageUrl({
     shopId: order.shopId,
     phoneE164: order.customer.phoneE164,
     orderId: order.id,
+    order,
+    shop: order.shop,
+    purpose: "modify",
     request,
   });
 

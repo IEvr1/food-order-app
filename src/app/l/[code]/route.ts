@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveManagePayloadByShortCode } from "@/lib/deep-link-token";
+import { resolveManagePayloadByShortCode, manageLinkRemainingSeconds } from "@/lib/deep-link-token";
 import { isLinkPreviewBot } from "@/lib/link-preview-bot";
 import { MANAGE_SESSION_COOKIE, signManageSessionCookieValue } from "@/lib/manage-session";
 import { prisma } from "@/lib/prisma";
@@ -28,10 +28,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
 
     const { linkExpiresAt, ...sessionPayload } = payload;
-    const remainingSec = Math.max(
-      60,
-      Math.min(7 * 24 * 60 * 60, Math.floor((linkExpiresAt.getTime() - Date.now()) / 1000)),
-    );
+    const remainingSec = manageLinkRemainingSeconds(linkExpiresAt);
 
     const session = signManageSessionCookieValue(sessionPayload, remainingSec);
 
