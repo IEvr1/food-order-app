@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveManagePayloadByShortCode } from "@/lib/deep-link-token";
+import { isLinkPreviewBot } from "@/lib/link-preview-bot";
 import { MANAGE_SESSION_COOKIE, signManageSessionCookieValue } from "@/lib/manage-session";
+import { prisma } from "@/lib/prisma";
+import { smsLinkPreviewResponse } from "@/lib/sms-link-preview";
 import { getAppBaseUrl } from "@/lib/sms-link-base";
 
 type RouteParams = {
@@ -12,6 +15,18 @@ export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { code } = await params;
     const payload = await resolveManagePayloadByShortCode(code);
+
+    if (isLinkPreviewBot(request)) {
+      const shop = await prisma.shop.findUnique({
+        where: { id: payload.shopId },
+        select: { name: true },
+      });
+      const title = shop?.name
+        ? `${shop.name} — Διαχείριση παραγγελίας`
+        : "Διαχείριση παραγγελίας";
+      return smsLinkPreviewResponse(title);
+    }
+
     const { linkExpiresAt, ...sessionPayload } = payload;
     const remainingSec = Math.max(
       60,
