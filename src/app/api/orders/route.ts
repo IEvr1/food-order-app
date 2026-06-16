@@ -138,6 +138,7 @@ export async function POST(request: Request) {
     shop,
     requestedAt,
     fulfillmentType: payload.fulfillmentType,
+    isAsap: payload.timing === "ASAP",
   });
   if (!timeCheck.ok) {
     const msg =

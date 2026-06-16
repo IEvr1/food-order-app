@@ -274,9 +274,9 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
 
   useEffect(() => {
     if (step === "checkout" && shop && !todayIso) {
-      void fetch("/api/orders/availability?date=" + new Date().toISOString().slice(0, 10))
+      void fetch("/api/orders/availability")
         .then((r) => r.json())
-        .then((d) => setTodayIso(d.today ?? new Date().toISOString().slice(0, 10)));
+        .then((d) => setTodayIso(d.today ?? ""));
     }
   }, [step, shop, todayIso]);
 

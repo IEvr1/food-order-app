@@ -97,6 +97,7 @@ export async function POST(request: Request) {
     shop: order.shop,
     requestedAt,
     fulfillmentType: payload.fulfillmentType,
+    isAsap: payload.timing === "ASAP",
   });
   if (!timeCheck.ok) {
     return NextResponse.json({ error: timeCheck.error, code: timeCheck.error }, { status: 409 });

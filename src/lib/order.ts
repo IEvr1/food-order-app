@@ -175,6 +175,8 @@ export async function validateRequestedAtTime(params: {
   requestedAt: Date;
   fulfillmentType?: "PICKUP" | "DELIVERY";
   now?: Date;
+  /** ASAP uses requestedAt = now; skip the prep-buffer slot check for today. */
+  isAsap?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: RequestedAtValidationError }> {
   const { shop, requestedAt } = params;
   const now = params.now ?? new Date();
@@ -192,7 +194,7 @@ export async function validateRequestedAtTime(params: {
 
   const todayIso = todayIsoInTimeZone(timeZone, now);
   const earliest = addMinutes(now, prepMinutes);
-  if (localDate === todayIso && requestedAt < earliest) {
+  if (!params.isAsap && localDate === todayIso && requestedAt < earliest) {
     return { ok: false, error: "TOO_SOON" };
   }
 
