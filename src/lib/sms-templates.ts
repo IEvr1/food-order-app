@@ -37,7 +37,7 @@ export function buildOrderConfirmedSms(params: OrderConfirmedParams): string {
       fulfillmentType === "DELIVERY"
         ? `delivery στη ${deliveryAddress ?? "διεύθυνσή σας"}`
         : `παραλαβή ${when.day} ${when.date} στις ${when.time}`;
-    return `${shopName}: Η παραγγελία ${num} επιβεβαιώθηκε! ${fulfillment}.\nΔιαχείριση παραγγελίας: ${manageUrl}`;
+    return `${shopName}: Η παραγγελία σας, στο ${num} επιβεβαιώθηκε! ${fulfillment}.\nΔιαχείριση παραγγελίας: ${manageUrl}`;
   }
   const fulfillment =
     fulfillmentType === "DELIVERY"
@@ -50,7 +50,7 @@ export function buildOrderReadySms(params: OrderSmsBase): string {
   const { shopName, orderNumber, manageUrl, lang } = params;
   const num = `#${orderNumber}`;
   if (lang === "el") {
-    return `${shopName}: Η παραγγελία ${num} είναι έτοιμη για παραλαβή!\n${manageUrl}`;
+    return `${shopName}: Η παραγγελία σας, στο ${num} είναι έτοιμη για παραλαβή!\n${manageUrl}`;
   }
   return `${shopName}: Order ${num} is ready for pickup!\n${manageUrl}`;
 }
@@ -67,7 +67,7 @@ export function buildOrderOutForDeliverySms(
         : ` Estimated arrival in ~${etaMinutes} min, by ${arrivalTime}.`
       : "";
   if (lang === "el") {
-    return `${shopName}: Η παραγγελία ${num} είναι στο δρόμο!${etaSuffix}\n${manageUrl}`;
+    return `${shopName}: Η παραγγελία σας, στο ${num} είναι στο δρόμο!${etaSuffix}\n${manageUrl}`;
   }
   return `${shopName}: Order ${num} is on its way!${etaSuffix}\n${manageUrl}`;
 }
@@ -76,7 +76,7 @@ export function buildOrderCancelledSms(params: OrderSmsBase & { when?: SalonSmsW
   const { shopName, orderNumber, manageUrl, lang } = params;
   const num = `#${orderNumber}`;
   if (lang === "el") {
-    return `${shopName}: Η παραγγελία ${num} ακυρώθηκε.\nΝέα παραγγελία: ${manageUrl}`;
+    return `${shopName}: Η παραγγελία σας, στο ${num} ακυρώθηκε.\nΝέα παραγγελία: ${manageUrl}`;
   }
   return `${shopName}: Order ${num} was cancelled.\nOrder again: ${manageUrl}`;
 }
@@ -85,7 +85,7 @@ export function buildOrderModifiedSms(params: OrderSmsBase): string {
   const { shopName, orderNumber, manageUrl, lang } = params;
   const num = `#${orderNumber}`;
   if (lang === "el") {
-    return `${shopName}: Η παραγγελία ${num} ενημερώθηκε.\nΔείτε τις λεπτομέρειες: ${manageUrl}`;
+    return `${shopName}: Η παραγγελία σας, στο ${num} ενημερώθηκε.\nΔείτε τις λεπτομέρειες: ${manageUrl}`;
   }
   return `${shopName}: Order ${num} was updated.\nView details: ${manageUrl}`;
 }
