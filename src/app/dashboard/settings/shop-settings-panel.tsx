@@ -49,6 +49,89 @@ function dayStatesToEntries(days: DayHoursState[]): ShopHourEntry[] {
     }));
 }
 
+function DayHoursList({
+  dayHours,
+  labels,
+  lang,
+  t,
+  hourOptions,
+  endHourOptions,
+  onUpdateDay,
+}: {
+  dayHours: DayHoursState[];
+  labels: Record<number, string>;
+  lang: Locale;
+  t: { open: string; from: string; until: string; closed: string };
+  hourOptions: number[];
+  endHourOptions: number[];
+  onUpdateDay: (weekday: number, patch: Partial<DayHoursState>) => void;
+}) {
+  return (
+    <ul className="mt-4 space-y-3">
+      {dayHours.map((day) => {
+        const invalid = day.open && day.endHour <= day.startHour;
+        return (
+          <li
+            key={day.weekday}
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-white px-3 py-2 ring-1 ring-zinc-200"
+          >
+            <span className="min-w-[5.5rem] text-sm font-medium text-zinc-900">
+              {labels[day.weekday]}
+            </span>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={day.open}
+                onChange={(e) => onUpdateDay(day.weekday, { open: e.target.checked })}
+                className="rounded border-zinc-300"
+              />
+              {t.open}
+            </label>
+            {day.open ? (
+              <>
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-zinc-500">{t.from}</span>
+                  <select
+                    value={day.startHour}
+                    onChange={(e) =>
+                      onUpdateDay(day.weekday, { startHour: Number(e.target.value) })
+                    }
+                    className="rounded-lg border border-zinc-300 px-2 py-1"
+                  >
+                    {hourOptions.map((h) => (
+                      <option key={h} value={h}>
+                        {formatShopHour(h, lang)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-zinc-500">{t.until}</span>
+                  <select
+                    value={day.endHour}
+                    onChange={(e) =>
+                      onUpdateDay(day.weekday, { endHour: Number(e.target.value) })
+                    }
+                    className={`rounded-lg border px-2 py-1 ${invalid ? "border-red-400" : "border-zinc-300"}`}
+                  >
+                    {endHourOptions.map((h) => (
+                      <option key={h} value={h} disabled={h <= day.startHour}>
+                        {formatShopHour(h, lang)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : (
+              <span className="text-sm text-zinc-400">{t.closed}</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function ShopSettingsPanel({
   lang,
   shop,
@@ -62,6 +145,7 @@ export function ShopSettingsPanel({
     prepMinutes: number;
     deliveryPrepMinutes: number;
     hours: ShopHourEntry[];
+    deliveryHours: ShopHourEntry[];
   };
 }) {
   const t =
@@ -72,8 +156,10 @@ export function ShopSettingsPanel({
           prepPickup: "TakeAway (λεπτά)",
           prepDelivery: "Delivery (λεπτά)",
           prepHint: "Εμφανίζονται στον πελάτη κατά την παραγγελία.",
-          hoursSection: "Ωράριο λειτουργίας",
-          hoursHint: "Ημέρες και ώρες που δέχεστε παραγγελίες (ώρα λήξης = κλείσιμο).",
+          deliveryHoursSection: "Ωράριο delivery",
+          deliveryHoursHint: "Ημέρες και ώρες που δέχεστε παραγγελίες delivery.",
+          hoursSection: "Ωράριο παραλαβής",
+          hoursHint: "Ημέρες και ώρες για παραγγελίες take away (ώρα λήξης = κλείσιμο).",
           open: "Ανοιχτό",
           from: "Από",
           until: "Έως",
@@ -92,8 +178,10 @@ export function ShopSettingsPanel({
           prepPickup: "Pickup (minutes)",
           prepDelivery: "Delivery (minutes)",
           prepHint: "Shown to customers when ordering.",
-          hoursSection: "Opening hours",
-          hoursHint: "Days and hours when you accept orders (closing time = end hour).",
+          deliveryHoursSection: "Delivery hours",
+          deliveryHoursHint: "Days and hours when you accept delivery orders.",
+          hoursSection: "Pickup hours",
+          hoursHint: "Days and hours for take-away orders (closing time = end hour).",
           open: "Open",
           from: "From",
           until: "Until",
@@ -126,6 +214,9 @@ export function ShopSettingsPanel({
   const [prepMinutes, setPrepMinutes] = useState(shop.prepMinutes);
   const [deliveryPrepMinutes, setDeliveryPrepMinutes] = useState(shop.deliveryPrepMinutes);
   const [dayHours, setDayHours] = useState<DayHoursState[]>(() => buildDayStates(shop.hours));
+  const [deliveryDayHours, setDeliveryDayHours] = useState<DayHoursState[]>(() =>
+    buildDayStates(shop.deliveryHours),
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -135,9 +226,15 @@ export function ShopSettingsPanel({
     );
   };
 
-  const hoursValid = dayHours.every(
-    (d) => !d.open || d.endHour > d.startHour,
-  );
+  const updateDeliveryDay = (weekday: number, patch: Partial<DayHoursState>) => {
+    setDeliveryDayHours((prev) =>
+      prev.map((d) => (d.weekday === weekday ? { ...d, ...patch } : d)),
+    );
+  };
+
+  const hoursValid =
+    dayHours.every((d) => !d.open || d.endHour > d.startHour) &&
+    deliveryDayHours.every((d) => !d.open || d.endHour > d.startHour);
 
   const save = () => {
     if (!hoursValid) {
@@ -152,6 +249,7 @@ export function ShopSettingsPanel({
         prepMinutes,
         deliveryPrepMinutes,
         hours: dayStatesToEntries(dayHours),
+        deliveryHours: dayStatesToEntries(deliveryDayHours),
         lang,
       });
       setMessage(result.ok ? t.saved : "Error");
@@ -198,70 +296,31 @@ export function ShopSettingsPanel({
       </section>
 
       <section className="mt-6 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
+        <h2 className="text-sm font-semibold text-zinc-900">{t.deliveryHoursSection}</h2>
+        <p className="mt-1 text-xs text-zinc-500">{t.deliveryHoursHint}</p>
+        <DayHoursList
+          dayHours={deliveryDayHours}
+          labels={labels}
+          lang={lang}
+          t={t}
+          hourOptions={hourOptions}
+          endHourOptions={endHourOptions}
+          onUpdateDay={updateDeliveryDay}
+        />
+      </section>
+
+      <section className="mt-6 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
         <h2 className="text-sm font-semibold text-zinc-900">{t.hoursSection}</h2>
         <p className="mt-1 text-xs text-zinc-500">{t.hoursHint}</p>
-        <ul className="mt-4 space-y-3">
-          {dayHours.map((day) => {
-            const invalid = day.open && day.endHour <= day.startHour;
-            return (
-              <li
-                key={day.weekday}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-white px-3 py-2 ring-1 ring-zinc-200"
-              >
-                <span className="min-w-[5.5rem] text-sm font-medium text-zinc-900">
-                  {labels[day.weekday]}
-                </span>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={day.open}
-                    onChange={(e) => updateDay(day.weekday, { open: e.target.checked })}
-                    className="rounded border-zinc-300"
-                  />
-                  {t.open}
-                </label>
-                {day.open ? (
-                  <>
-                    <label className="flex items-center gap-2 text-sm">
-                      <span className="text-zinc-500">{t.from}</span>
-                      <select
-                        value={day.startHour}
-                        onChange={(e) =>
-                          updateDay(day.weekday, { startHour: Number(e.target.value) })
-                        }
-                        className="rounded-lg border border-zinc-300 px-2 py-1"
-                      >
-                        {hourOptions.map((h) => (
-                          <option key={h} value={h}>
-                            {formatShopHour(h, lang)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">
-                      <span className="text-zinc-500">{t.until}</span>
-                      <select
-                        value={day.endHour}
-                        onChange={(e) =>
-                          updateDay(day.weekday, { endHour: Number(e.target.value) })
-                        }
-                        className={`rounded-lg border px-2 py-1 ${invalid ? "border-red-400" : "border-zinc-300"}`}
-                      >
-                        {endHourOptions.map((h) => (
-                          <option key={h} value={h} disabled={h <= day.startHour}>
-                            {formatShopHour(h, lang)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </>
-                ) : (
-                  <span className="text-sm text-zinc-400">{t.closed}</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <DayHoursList
+          dayHours={dayHours}
+          labels={labels}
+          lang={lang}
+          t={t}
+          hourOptions={hourOptions}
+          endHourOptions={endHourOptions}
+          onUpdateDay={updateDay}
+        />
       </section>
 
       <p className="mt-6 text-sm text-zinc-600">{t.hint}</p>

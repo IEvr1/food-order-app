@@ -4,6 +4,7 @@ import { getManageSessionPayload } from "@/lib/manage-from-request";
 import {
   canCustomerManageOrder,
   formatPriceEuros,
+  getCustomerFulfillmentAt,
   getCustomerManageUntil,
   getManageLinkIntent,
   orderUiPhase,
@@ -33,7 +34,11 @@ function serializeOrderSummary(
     id: order.id,
     orderNumber: order.orderNumber,
     requestedAt: order.requestedAt.toISOString(),
-    requestedAtDisplay: formatSalonDateTimeDisplay(order.requestedAt, shopTimezone, locale),
+    requestedAtDisplay: formatSalonDateTimeDisplay(
+      getCustomerFulfillmentAt(order, shop),
+      shopTimezone,
+      locale,
+    ),
     status: order.status,
     fulfillmentType: order.fulfillmentType,
     deliveryAddress: order.deliveryAddress,

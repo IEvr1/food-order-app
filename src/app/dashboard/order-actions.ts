@@ -57,6 +57,7 @@ const settingsSchema = z.object({
   prepMinutes: prepMinutesSchema,
   deliveryPrepMinutes: prepMinutesSchema,
   hours: z.array(shopHourEntrySchema),
+  deliveryHours: z.array(shopHourEntrySchema),
   lang: z.string().optional(),
 });
 
@@ -267,6 +268,15 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
     prisma.shopHours.deleteMany({ where: { shopId: shop.id } }),
     prisma.shopHours.createMany({
       data: data.hours.map((h) => ({
+        shopId: shop.id,
+        weekday: h.weekday,
+        startHour: h.startHour,
+        endHour: h.endHour,
+      })),
+    }),
+    prisma.shopDeliveryHours.deleteMany({ where: { shopId: shop.id } }),
+    prisma.shopDeliveryHours.createMany({
+      data: data.deliveryHours.map((h) => ({
         shopId: shop.id,
         weekday: h.weekday,
         startHour: h.startHour,

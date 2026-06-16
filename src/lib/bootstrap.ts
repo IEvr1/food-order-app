@@ -25,6 +25,13 @@ export async function ensureShopSeed() {
           endHour: 23,
         })),
       },
+      deliveryHours: {
+        create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+          weekday,
+          startHour: 11,
+          endHour: 23,
+        })),
+      },
       categories: {
         create: [
           {

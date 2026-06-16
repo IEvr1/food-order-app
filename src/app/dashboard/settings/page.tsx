@@ -12,7 +12,10 @@ export default async function DashboardSettingsPage({
   const lang = parseLocale(params.lang);
   await ensureShopSeed();
   const shop = await prisma.shop.findFirst({
-    include: { hours: { orderBy: { weekday: "asc" } } },
+    include: {
+      hours: { orderBy: { weekday: "asc" } },
+      deliveryHours: { orderBy: { weekday: "asc" } },
+    },
   });
   if (!shop) return <p>No shop</p>;
 
@@ -27,6 +30,11 @@ export default async function DashboardSettingsPage({
         prepMinutes: shop.prepMinutes,
         deliveryPrepMinutes: shop.deliveryPrepMinutes,
         hours: shop.hours.map((h) => ({
+          weekday: h.weekday,
+          startHour: h.startHour,
+          endHour: h.endHour,
+        })),
+        deliveryHours: shop.deliveryHours.map((h) => ({
           weekday: h.weekday,
           startHour: h.startHour,
           endHour: h.endHour,

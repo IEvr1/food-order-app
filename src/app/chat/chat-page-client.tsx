@@ -76,6 +76,8 @@ type ManageSummary = {
 
 type Step = "menu" | "checkout" | "success" | "manage";
 
+type TimeSlot = { iso: string; label: string; time: string };
+
 function cartTotal(lines: CartLine[]) {
   return lines.reduce((s, l) => s + l.priceCents * l.quantity, 0);
 }
@@ -95,6 +97,9 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           scheduled: "Προγραμματισμένη παραγγελία",
           pickDate: "Ημερομηνία",
           pickTime: "Ώρα",
+          pickTimePlaceholder: "Επιλέξτε ώρα",
+          noTimeSlots: "Δεν υπάρχουν διαθέσιμες ώρες για αυτή την ημερομηνία.",
+          loadingTimeSlots: "Φόρτωση ωρών...",
           prepEstimate: (minutes: number) =>
             `Εκτιμώμενος χρόνος ετοιμασίας: ~${minutes} λεπτά`,
           prepEstimateDelivery: (minutes: number) =>
@@ -145,6 +150,9 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           scheduled: "Scheduled order",
           pickDate: "Date",
           pickTime: "Time",
+          pickTimePlaceholder: "Select time",
+          noTimeSlots: "No available times for this date.",
+          loadingTimeSlots: "Loading times...",
           prepEstimate: (minutes: number) => `Estimated preparation time: ~${minutes} min`,
           prepEstimateDelivery: (minutes: number) => `Estimated delivery time: ~${minutes} min`,
           namePh: "Full name",
@@ -193,6 +201,8 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
   const [todayIso, setTodayIso] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -279,6 +289,37 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
         .then((d) => setTodayIso(d.today ?? ""));
     }
   }, [step, shop, todayIso]);
+
+  useEffect(() => {
+    if (!isScheduled || !scheduleDate) {
+      setTimeSlots([]);
+      setScheduleTime("");
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingTimeSlots(true);
+
+    void fetch(
+      `/api/orders/availability?date=${encodeURIComponent(scheduleDate)}&fulfillmentType=${fulfillment}&lang=${locale}`,
+    )
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const slots: TimeSlot[] = d.slots ?? [];
+        setTimeSlots(slots);
+        setScheduleTime((prev) =>
+          slots.some((slot) => slot.time === prev) ? prev : (slots[0]?.time ?? ""),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTimeSlots(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isScheduled, scheduleDate, fulfillment, locale]);
 
   const activeCategory = useMemo(
     () => categories.find((c) => c.id === activeCategoryId) ?? categories[0],
@@ -550,6 +591,7 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
                     if (!checked) {
                       setScheduleDate("");
                       setScheduleTime("");
+                      setTimeSlots([]);
                     }
                   }}
                   className="h-4 w-4 rounded border-zinc-300 text-orange-600 focus:ring-orange-500"
@@ -571,12 +613,26 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">{t.pickTime}</label>
-                    <input
-                      type="time"
+                    <select
                       value={scheduleTime}
                       onChange={(e) => setScheduleTime(e.target.value)}
-                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-                    />
+                      disabled={!scheduleDate || loadingTimeSlots || timeSlots.length === 0}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm disabled:bg-zinc-50 disabled:text-zinc-400"
+                    >
+                      {!scheduleDate ? (
+                        <option value="">{t.pickTimePlaceholder}</option>
+                      ) : loadingTimeSlots ? (
+                        <option value="">{t.loadingTimeSlots}</option>
+                      ) : timeSlots.length === 0 ? (
+                        <option value="">{t.noTimeSlots}</option>
+                      ) : (
+                        timeSlots.map((slot) => (
+                          <option key={slot.iso} value={slot.time}>
+                            {slot.label}
+                          </option>
+                        ))
+                      )}
+                    </select>
                   </div>
                 </div>
               )}

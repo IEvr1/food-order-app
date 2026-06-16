@@ -39,6 +39,7 @@ model Shop {
   smsTokens            SmsLinkToken[]
   closures             ShopClosure[]
   hours                ShopHours[]
+  deliveryHours        ShopDeliveryHours[]
 }
 
 model ShopClosure {
@@ -54,6 +55,15 @@ model ShopClosure {
 }
 
 model ShopHours {
+  id        String @id @default(cuid())
+  shopId    String
+  weekday   Int
+  startHour Int
+  endHour   Int
+  shop      Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model ShopDeliveryHours {
   id        String @id @default(cuid())
   shopId    String
   weekday   Int

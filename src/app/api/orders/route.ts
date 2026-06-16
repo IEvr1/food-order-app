@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ensureShopSeed } from "@/lib/bootstrap";
 import { validateDeliveryLocation } from "@/lib/delivery-zone";
 import {
+  getCustomerFulfillmentAt,
   getNextOrderNumber,
   orderDateForInstant,
   resolveCartLines,
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
             "Βάλτε έγκυρο κυπριακό κινητό: 8 ψηφία (π.χ. 99XXXXXX χωρίς +357).",
           shopClosed: "Το κατάστημα είναι κλειστά αυτή την ημερομηνία.",
           outsideHours: "Η ώρα είναι εκτός ωραρίου λειτουργίας.",
+          outsideDeliveryHours: "Η ώρα είναι εκτός ωραρίου delivery.",
           tooSoon: "Η ώρα είναι πολύ σύντομα. Δοκιμάστε αργότερα.",
           pastTime: "Η ώρα έχει περάσει.",
           shopClosedNow: "Το κατάστημα είναι κλειστά αυτή τη στιγμή.",
@@ -94,6 +96,7 @@ export async function POST(request: Request) {
           invalidPhone: "Enter a valid Cyprus mobile: 8 digits without +357.",
           shopClosed: "The shop is closed on this date.",
           outsideHours: "That time is outside opening hours.",
+          outsideDeliveryHours: "That time is outside delivery hours.",
           tooSoon: "That time is too soon. Please choose a later time.",
           pastTime: "That time has already passed.",
           shopClosedNow: "The shop is closed right now.",
@@ -147,7 +150,9 @@ export async function POST(request: Request) {
           ? t.shopClosedNow
           : t.shopClosed
         : timeCheck.error === "OUTSIDE_HOURS"
-          ? t.outsideHours
+          ? payload.fulfillmentType === "DELIVERY"
+            ? t.outsideDeliveryHours
+            : t.outsideHours
           : timeCheck.error === "TOO_SOON"
             ? t.tooSoon
             : t.pastTime;
@@ -235,7 +240,7 @@ export async function POST(request: Request) {
     request,
   });
 
-  const when = smsWhenFromInstant(requestedAt, shop.timezone, lang);
+  const when = smsWhenFromInstant(getCustomerFulfillmentAt(order, shop), shop.timezone, lang);
   const message = buildOrderConfirmedSms({
     shopName: shop.name,
     orderNumber: order.orderNumber,

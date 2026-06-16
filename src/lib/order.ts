@@ -101,12 +101,30 @@ export async function getNextOrderNumber(shopId: string, orderDate: string): Pro
   return (last?.orderNumber ?? 0) + 1;
 }
 
-export type SlotOption = { iso: string; label: string };
+export type SlotOption = { iso: string; label: string; time: string };
+
+async function shopHoursForFulfillment(
+  shopId: string,
+  weekday: number,
+  fulfillmentType: "PICKUP" | "DELIVERY",
+): Promise<{ startHour: number; endHour: number } | null> {
+  if (fulfillmentType === "DELIVERY") {
+    return prisma.shopDeliveryHours.findFirst({
+      where: { shopId, weekday },
+      select: { startHour: true, endHour: true },
+    });
+  }
+  return prisma.shopHours.findFirst({
+    where: { shopId, weekday },
+    select: { startHour: true, endHour: true },
+  });
+}
 
 export async function listOrderTimeSlots(params: {
   shop: Pick<Shop, "id" | "timezone" | "prepMinutes" | "deliveryPrepMinutes">;
   dateIso: string;
   fulfillmentType?: "PICKUP" | "DELIVERY";
+  locale?: string;
   now?: Date;
 }): Promise<SlotOption[]> {
   const { shop, dateIso } = params;
@@ -119,16 +137,18 @@ export async function listOrderTimeSlots(params: {
   }
 
   const weekday = weekdayInTimeZone(dateIso, timeZone);
-  const hours = await prisma.shopHours.findFirst({
-    where: { shopId: shop.id, weekday },
-  });
+  const hours = await shopHoursForFulfillment(
+    shop.id,
+    weekday,
+    params.fulfillmentType ?? "PICKUP",
+  );
   if (!hours) {
     return [];
   }
 
   const todayIso = todayIsoInTimeZone(timeZone, now);
   const slots: SlotOption[] = [];
-  const locale = "el-GR";
+  const locale = params.locale ?? "el-GR";
 
   for (let hour = hours.startHour; hour < hours.endHour; hour += 1) {
     for (let minute = 0; minute < 60; minute += SLOT_INTERVAL_MINUTES) {
@@ -151,6 +171,7 @@ export async function listOrderTimeSlots(params: {
       slots.push({
         iso: slotStart.toISOString(),
         label: formatSalonTime(slotStart, timeZone, locale),
+        time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
       });
     }
   }
@@ -199,9 +220,11 @@ export async function validateRequestedAtTime(params: {
   }
 
   const weekday = weekdayInTimeZone(localDate, timeZone);
-  const hours = await prisma.shopHours.findFirst({
-    where: { shopId: shop.id, weekday },
-  });
+  const hours = await shopHoursForFulfillment(
+    shop.id,
+    weekday,
+    params.fulfillmentType ?? "PICKUP",
+  );
   if (!hours) {
     return { ok: false, error: "OUTSIDE_HOURS" };
   }
@@ -225,6 +248,20 @@ export type CustomerManageOrder = {
 
 export function isAsapOrder(order: Pick<CustomerManageOrder, "requestedAt" | "createdAt">): boolean {
   return order.requestedAt.getTime() - order.createdAt.getTime() < ASAP_ORDER_THRESHOLD_MS;
+}
+
+/** Customer-facing pickup/delivery time: scheduled slot, or order time + prep buffer for ASAP. */
+export function getCustomerFulfillmentAt(
+  order: Pick<CustomerManageOrder, "requestedAt" | "createdAt" | "fulfillmentType">,
+  shop: ShopPrepTimes,
+): Date {
+  if (isAsapOrder(order)) {
+    return addMinutes(
+      order.requestedAt,
+      prepBufferMinutes(shop, order.fulfillmentType as "PICKUP" | "DELIVERY"),
+    );
+  }
+  return order.requestedAt;
 }
 
 export function getCustomerManageUntil(
