@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { verifyDeepLinkToken, manageLinkRemainingSeconds } from "@/lib/deep-link-token";
 import { isLinkPreviewBot } from "@/lib/link-preview-bot";
-import { MANAGE_SESSION_COOKIE, signManageSessionCookieValue } from "@/lib/manage-session";
+import {
+  manageLinkEnterUrl,
+  manageSessionRedirectResponse,
+  redeemManageLinkByToken,
+} from "@/lib/manage-link-redeem";
 import { prisma } from "@/lib/prisma";
 import { smsLinkPreviewResponse } from "@/lib/sms-link-preview";
-import { getAppBaseUrl } from "@/lib/sms-link-base";
+import { getAppBaseUrl, requestMatchesAppBase } from "@/lib/sms-link-base";
 
 type RouteParams = {
   params: Promise<{ token: string }>;
@@ -14,11 +17,31 @@ export async function GET(request: Request, { params }: RouteParams) {
   const base = getAppBaseUrl(request);
   try {
     const { token } = await params;
-    const decoded = await verifyDeepLinkToken(token);
+
+    if (!requestMatchesAppBase(request)) {
+      if (isLinkPreviewBot(request)) {
+        try {
+          const redeemed = await redeemManageLinkByToken(token);
+          const shop = await prisma.shop.findUnique({
+            where: { id: redeemed.session.shopId },
+            select: { name: true },
+          });
+          const title = shop?.name
+            ? `${shop.name} — Διαχείριση παραγγελίας`
+            : "Διαχείριση παραγγελίας";
+          return smsLinkPreviewResponse(title);
+        } catch {
+          return smsLinkPreviewResponse("Διαχείριση παραγγελίας");
+        }
+      }
+      return NextResponse.redirect(manageLinkEnterUrl(request, { token }));
+    }
+
+    const redeemed = await redeemManageLinkByToken(token);
 
     if (isLinkPreviewBot(request)) {
       const shop = await prisma.shop.findUnique({
-        where: { id: decoded.shopId },
+        where: { id: redeemed.session.shopId },
         select: { name: true },
       });
       const title = shop?.name
@@ -27,29 +50,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       return smsLinkPreviewResponse(title);
     }
 
-    const remainingSec = manageLinkRemainingSeconds(decoded.linkExpiresAt);
-
-    const session = signManageSessionCookieValue(
-      {
-        shopId: decoded.shopId,
-        phoneE164: decoded.phoneE164,
-        orderId: decoded.orderId,
-      },
-      remainingSec,
-    );
-
-    const url = new URL("/chat", base);
-    url.searchParams.set("fromLink", "1");
-
-    const res = NextResponse.redirect(url);
-    res.cookies.set(MANAGE_SESSION_COOKIE, session, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: remainingSec,
-    });
-    return res;
+    return manageSessionRedirectResponse(request, redeemed);
   } catch {
     return NextResponse.redirect(new URL("/chat", base));
   }

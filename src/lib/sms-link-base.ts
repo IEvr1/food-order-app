@@ -66,3 +66,13 @@ export function getAppBaseUrl(request?: Request): string {
 export function getSmsLinkBaseUrl(request?: Request): string {
   return getConfiguredBaseUrl("SMS_LINK_BASE_URL") ?? getAppBaseUrl(request);
 }
+
+/** True when the request arrived on the app host (where manage session cookies must be set). */
+export function requestMatchesAppBase(request: Request): boolean {
+  try {
+    const appBase = getAppBaseUrl(request);
+    return normalizeBaseUrl(new URL(request.url).origin) === normalizeBaseUrl(new URL(appBase).origin);
+  } catch {
+    return false;
+  }
+}
