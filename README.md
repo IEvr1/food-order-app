@@ -72,13 +72,14 @@ The delivery link cannot access owner pages (settings, KPIs, etc.). The owner da
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL (`food_order` or hosted DB) |
-| `APP_BASE_URL` | Public app URL (`foodorder.nexaipla.com` — chat, dashboard) |
-| `SMS_LINK_BASE_URL` | SMS short links (`orders.nexaipla.com`) |
+| `APP_BASE_URL` | Public URL for this shop — chat, dashboard, **and** SMS manage links (`/l/:code`) |
 | `SMS_LINK_SECRET` | Signs customer manage links |
 | `DASHBOARD_LINK_SECRET` | Signs owner dashboard and delivery links |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Maps + Places for delivery |
 
 SMS via Twilio and/or `SMS_GATEWAY_URL` + `SMS_GATEWAY_API_KEY`.
+
+**One domain per restaurant:** set only `APP_BASE_URL` (e.g. `https://souvlaki.nexaipla.com`). SMS links look like `https://souvlaki.nexaipla.com/l/Ab12Cd34` — no separate orders subdomain.
 
 ## Pages
 
@@ -100,7 +101,7 @@ The app is single-tenant in code (`shop.findFirst()`). To onboard another restau
 | Vercel project | Link same repo, separate env |
 | `DATABASE_URL` | Dedicated Postgres (e.g. Neon) |
 | Secrets | Own `SMS_LINK_SECRET`, `DASHBOARD_LINK_SECRET`, Twilio, Maps key |
-| `APP_BASE_URL` | Own subdomain, e.g. `souvlaki.example.com` |
+| `APP_BASE_URL` | One subdomain for everything, e.g. `https://souvlaki.nexaipla.com` (chat + SMS links) |
 
 **Quick onboarding:** new DB → new Vercel project → env vars → `prisma migrate deploy` → DNS → `npm run dashboard:link` → configure shop in Settings.
 

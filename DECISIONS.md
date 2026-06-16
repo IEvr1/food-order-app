@@ -166,7 +166,7 @@ The codebase is **single-tenant**: `prisma.shop.findFirst()` everywhere, one sho
 | **Vercel project** | Ένα (link στο ίδιο repo) |
 | **PostgreSQL** | Ξεχωριστή βάση (`DATABASE_URL`) |
 | **Secrets** | Ξεχωριστά: `SMS_LINK_SECRET`, `DASHBOARD_LINK_SECRET`, Twilio, Maps key |
-| **Public URL** | Ξεχωριστό subdomain, π.χ. `{slug}.example.com` |
+| **Public URL** | Ένα subdomain ανά shop — `APP_BASE_URL` για chat, dashboard και SMS links (`/l/:code`) |
 | **Shop data** | Seed / ρυθμίσεις μόνο σε αυτή τη βάση |
 
 Δεν μοιράζουμε βάση ή Vercel project μεταξύ εστιατορίων. SMS links, dashboard links, cron και PII μένουν πλήρως απομονωμένα.
@@ -186,7 +186,7 @@ The codebase is **single-tenant**: `prisma.shop.findFirst()` everywhere, one sho
 
 1. Δημιουργία Postgres DB (π.χ. Neon) — **νέα βάση, όχι reuse**
 2. Νέο Vercel project → link ίδιο Git repo
-3. Env vars (βλ. README) — **νέα secrets**, `APP_BASE_URL` = production URL του shop
+3. Env vars (βλ. README) — **νέα secrets**, `APP_BASE_URL` = production URL του shop (chat + SMS links, ένα domain)
 4. `prisma migrate deploy` στη νέα βάση
 5. `npm run dashboard:link` — link ιδιοκτήτη για αυτό το deployment
 6. DNS subdomain → Vercel domain
