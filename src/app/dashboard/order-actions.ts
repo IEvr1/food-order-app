@@ -53,6 +53,7 @@ const prepTimesSchema = z.object({
 const settingsSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
+  address: z.string().max(500).nullable(),
   deliveryRadiusKm: z.number().min(0).max(15),
   prepMinutes: prepMinutesSchema,
   deliveryPrepMinutes: prepMinutesSchema,
@@ -260,6 +261,7 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
       data: {
         latitude: data.latitude,
         longitude: data.longitude,
+        address: data.address,
         deliveryRadiusMeters: Math.round(data.deliveryRadiusKm * 1000),
         prepMinutes: data.prepMinutes,
         deliveryPrepMinutes: data.deliveryPrepMinutes,

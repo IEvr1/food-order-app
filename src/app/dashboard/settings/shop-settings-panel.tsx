@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   APIProvider,
   AdvancedMarker,
+  Circle,
   Map,
   MapMouseEvent,
+  useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import { updateShopDeliverySettings } from "@/app/dashboard/order-actions";
-import { parseLocale, type Locale } from "@/lib/locale";
+import { type Locale } from "@/lib/locale";
 import {
   defaultShopHours,
   formatShopHour,
@@ -23,6 +25,13 @@ type DayHoursState = {
   open: boolean;
   startHour: number;
   endHour: number;
+};
+
+type ShopLocation = {
+  address: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
 };
 
 function buildDayStates(hours: ShopHourEntry[]): DayHoursState[] {
@@ -132,6 +141,181 @@ function DayHoursList({
   );
 }
 
+function ShopAddressSearch({
+  lang,
+  value,
+  onChange,
+  onSelect,
+}: {
+  lang: Locale;
+  value: string;
+  onChange: (value: string) => void;
+  onSelect: (loc: ShopLocation) => void;
+}) {
+  const places = useMapsLibrary("places");
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [sessionToken, setSessionToken] = useState<google.maps.places.AutocompleteSessionToken | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (places && !sessionToken) {
+      setSessionToken(new places.AutocompleteSessionToken());
+    }
+  }, [places, sessionToken]);
+
+  const search = useCallback(
+    (nextValue: string) => {
+      onChange(nextValue);
+      if (!places || nextValue.length < 3) {
+        setPredictions([]);
+        return;
+      }
+      const service = new places.AutocompleteService();
+      service.getPlacePredictions(
+        {
+          input: nextValue,
+          componentRestrictions: { country: "cy" },
+          sessionToken: sessionToken ?? undefined,
+        },
+        (results) => setPredictions(results ?? []),
+      );
+    },
+    [onChange, places, sessionToken],
+  );
+
+  const pick = useCallback(
+    (placeId: string, description: string) => {
+      if (!places) return;
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ placeId }, (results, status) => {
+        if (status !== "OK" || !results?.[0]?.geometry?.location) return;
+        const loc = results[0].geometry.location;
+        onSelect({
+          address: description,
+          lat: loc.lat(),
+          lng: loc.lng(),
+          placeId,
+        });
+        onChange(description);
+        setPredictions([]);
+      });
+    },
+    [onChange, onSelect, places],
+  );
+
+  const placeholder =
+    lang === "el" ? "Αναζήτηση διεύθυνσης καταστήματος..." : "Search shop address...";
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => search(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+      />
+      {predictions.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-xl border border-zinc-200 bg-white shadow-lg">
+          {predictions.map((p) => (
+            <li key={p.place_id}>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-orange-50"
+                onClick={() => pick(p.place_id, p.description)}
+              >
+                {p.description}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status === "OK" && results?.[0]?.formatted_address) {
+        resolve(results[0].formatted_address);
+        return;
+      }
+      resolve(null);
+    });
+  });
+}
+
+function ShopLocationMap({
+  lat,
+  lng,
+  radiusKm,
+  address,
+  onCoordsChange,
+}: {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  address: string;
+  onCoordsChange: (coords: { lat: number; lng: number; address?: string }) => void;
+}) {
+  const radiusMeters = Math.round(radiusKm * 1000);
+
+  const updateCoords = useCallback(
+    async (nextLat: number, nextLng: number) => {
+      const nextAddress = await reverseGeocode(nextLat, nextLng);
+      onCoordsChange({
+        lat: nextLat,
+        lng: nextLng,
+        address: nextAddress ?? address,
+      });
+    },
+    [address, onCoordsChange],
+  );
+
+  return (
+    <div className="h-72 overflow-hidden rounded-xl border border-zinc-200">
+      <Map
+        center={{ lat, lng }}
+        defaultZoom={14}
+        gestureHandling="greedy"
+        mapId="shop-settings"
+        onClick={(e: MapMouseEvent) => {
+          const ll = e.detail.latLng;
+          if (ll) {
+            void updateCoords(ll.lat, ll.lng);
+          }
+        }}
+      >
+        {radiusMeters > 0 && (
+          <Circle
+            center={{ lat, lng }}
+            radius={radiusMeters}
+            fillColor="#f97316"
+            fillOpacity={0.15}
+            strokeColor="#ea580c"
+            strokeOpacity={0.8}
+            strokeWeight={2}
+            clickable={false}
+          />
+        )}
+        <AdvancedMarker
+          position={{ lat, lng }}
+          draggable
+          onDragEnd={(e) => {
+            const ll = e.latLng;
+            if (ll) {
+              void updateCoords(ll.lat(), ll.lng());
+            }
+          }}
+        />
+      </Map>
+    </div>
+  );
+}
+
 export function ShopSettingsPanel({
   lang,
   shop,
@@ -139,6 +323,7 @@ export function ShopSettingsPanel({
   lang: Locale;
   shop: {
     name: string;
+    address: string | null;
     latitude: number | null;
     longitude: number | null;
     deliveryRadiusMeters: number;
@@ -160,12 +345,16 @@ export function ShopSettingsPanel({
           deliveryHoursHint: "Ημέρες και ώρες που δέχεστε παραγγελίες delivery.",
           hoursSection: "Ωράριο παραλαβής",
           hoursHint: "Ημέρες και ώρες για παραγγελίες take away (ώρα λήξης = κλείσιμο).",
+          deliveryOpen: "Διαθέσιμο",
           open: "Ανοιχτό",
           from: "Από",
           until: "Έως",
           closed: "Κλειστό",
           location: "Θέση καταστήματος",
+          address: "Διεύθυνση καταστήματος",
+          addressHint: "Αναζητήστε ή σύρετε την καρφίτσα — η διεύθυνση ενημερώνεται αυτόματα.",
           radius: "Ακτίνα delivery (km)",
+          radiusHint: "Ο κύκλος στον χάρτη δείχνει την περιοχή delivery.",
           save: "Αποθήκευση",
           saved: "Αποθηκεύτηκε!",
           back: "Πίσω",
@@ -182,18 +371,42 @@ export function ShopSettingsPanel({
           deliveryHoursHint: "Days and hours when you accept delivery orders.",
           hoursSection: "Pickup hours",
           hoursHint: "Days and hours for take-away orders (closing time = end hour).",
+          deliveryOpen: "Available",
           open: "Open",
           from: "From",
           until: "Until",
           closed: "Closed",
           location: "Shop location",
+          address: "Shop address",
+          addressHint: "Search or drag the pin — the address updates automatically.",
           radius: "Delivery radius (km)",
+          radiusHint: "The circle on the map shows the delivery area.",
           save: "Save",
           saved: "Saved!",
           back: "Back",
           hint: "Drag the pin to your shop and set the delivery radius.",
           hoursError: "Closing time must be after opening time.",
         };
+
+  const deliveryHourLabels = useMemo(
+    () => ({
+      open: t.deliveryOpen,
+      from: t.from,
+      until: t.until,
+      closed: t.closed,
+    }),
+    [t],
+  );
+
+  const pickupHourLabels = useMemo(
+    () => ({
+      open: t.open,
+      from: t.from,
+      until: t.until,
+      closed: t.closed,
+    }),
+    [t],
+  );
 
   const labels = useMemo(() => weekdayLabels(lang), [lang]);
   const hourOptions = useMemo(
@@ -210,6 +423,7 @@ export function ShopSettingsPanel({
   const defaultLng = shop.longitude ?? 33.3823;
   const [lat, setLat] = useState(defaultLat);
   const [lng, setLng] = useState(defaultLng);
+  const [address, setAddress] = useState(shop.address ?? "");
   const [radiusKm, setRadiusKm] = useState((shop.deliveryRadiusMeters / 1000) || 3);
   const [prepMinutes, setPrepMinutes] = useState(shop.prepMinutes);
   const [deliveryPrepMinutes, setDeliveryPrepMinutes] = useState(shop.deliveryPrepMinutes);
@@ -232,6 +446,17 @@ export function ShopSettingsPanel({
     );
   };
 
+  const handleCoordsChange = useCallback(
+    (coords: { lat: number; lng: number; address?: string }) => {
+      setLat(coords.lat);
+      setLng(coords.lng);
+      if (coords.address !== undefined) {
+        setAddress(coords.address);
+      }
+    },
+    [],
+  );
+
   const hoursValid =
     dayHours.every((d) => !d.open || d.endHour > d.startHour) &&
     deliveryDayHours.every((d) => !d.open || d.endHour > d.startHour);
@@ -245,6 +470,7 @@ export function ShopSettingsPanel({
       const result = await updateShopDeliverySettings({
         latitude: lat,
         longitude: lng,
+        address: address.trim() || null,
         deliveryRadiusKm: radiusKm,
         prepMinutes,
         deliveryPrepMinutes,
@@ -302,7 +528,7 @@ export function ShopSettingsPanel({
           dayHours={deliveryDayHours}
           labels={labels}
           lang={lang}
-          t={t}
+          t={deliveryHourLabels}
           hourOptions={hourOptions}
           endHourOptions={endHourOptions}
           onUpdateDay={updateDeliveryDay}
@@ -316,65 +542,94 @@ export function ShopSettingsPanel({
           dayHours={dayHours}
           labels={labels}
           lang={lang}
-          t={t}
+          t={pickupHourLabels}
           hourOptions={hourOptions}
           endHourOptions={endHourOptions}
           onUpdateDay={updateDay}
         />
       </section>
 
-      <p className="mt-6 text-sm text-zinc-600">{t.hint}</p>
+      <section className="mt-6 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
+        <h2 className="text-sm font-semibold text-zinc-900">{t.location}</h2>
+        <p className="mt-1 text-xs text-zinc-500">{t.addressHint}</p>
 
-      <label className="mt-4 block text-sm font-medium">
-        {t.radius}
-        <input
-          type="number"
-          min={0}
-          max={15}
-          step={0.5}
-          value={radiusKm}
-          onChange={(e) => setRadiusKm(Number(e.target.value))}
-          className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
-        />
-      </label>
-
-      {apiKey ? (
-        <div className="mt-4 h-72 overflow-hidden rounded-xl border border-zinc-200">
+        {apiKey ? (
           <APIProvider apiKey={apiKey}>
-            <Map
-              defaultCenter={{ lat, lng }}
-              defaultZoom={14}
-              gestureHandling="greedy"
-              mapId="shop-settings"
-              onClick={(e: MapMouseEvent) => {
-                const ll = e.detail.latLng;
-                if (ll) {
-                  setLat(ll.lat);
-                  setLng(ll.lng);
-                }
-              }}
-            >
-              <AdvancedMarker
-                position={{ lat, lng }}
-                draggable
-                onDragEnd={(e) => {
-                  const ll = e.latLng;
-                  if (ll) {
-                    setLat(ll.lat());
-                    setLng(ll.lng());
-                  }
-                }}
-              />
-            </Map>
-          </APIProvider>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-amber-800">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY required</p>
-      )}
+            <label className="mt-4 block text-sm font-medium">
+              {t.address}
+              <div className="mt-1">
+                <ShopAddressSearch
+                  lang={lang}
+                  value={address}
+                  onChange={setAddress}
+                  onSelect={(loc) => {
+                    handleCoordsChange({
+                      lat: loc.lat,
+                      lng: loc.lng,
+                      address: loc.address,
+                    });
+                  }}
+                />
+              </div>
+            </label>
 
-      <p className="mt-2 text-xs text-zinc-500">
-        {lat.toFixed(5)}, {lng.toFixed(5)}
-      </p>
+            <label className="mt-4 block text-sm font-medium">
+              {t.radius}
+              <input
+                type="number"
+                min={0}
+                max={15}
+                step={0.5}
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+                className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
+              />
+            </label>
+            <p className="mt-1 text-xs text-zinc-500">{t.radiusHint}</p>
+
+            <div className="mt-4">
+              <ShopLocationMap
+                lat={lat}
+                lng={lng}
+                radiusKm={radiusKm}
+                address={address}
+                onCoordsChange={handleCoordsChange}
+              />
+            </div>
+          </APIProvider>
+        ) : (
+          <>
+            <label className="mt-4 block text-sm font-medium">
+              {t.address}
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
+              />
+            </label>
+
+            <label className="mt-4 block text-sm font-medium">
+              {t.radius}
+              <input
+                type="number"
+                min={0}
+                max={15}
+                step={0.5}
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+                className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2"
+              />
+            </label>
+            <p className="mt-1 text-xs text-zinc-500">{t.radiusHint}</p>
+            <p className="mt-4 text-sm text-amber-800">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY required</p>
+          </>
+        )}
+
+        <p className="mt-2 text-xs text-zinc-500">
+          {lat.toFixed(5)}, {lng.toFixed(5)}
+        </p>
+      </section>
 
       <button
         type="button"
