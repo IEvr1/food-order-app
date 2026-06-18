@@ -1,5 +1,11 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
 import { ensureShopSeed } from "@/lib/bootstrap";
-import { isDashboardLinkAuthAvailable } from "@/lib/dashboard-auth";
+import {
+  DASHBOARD_ACCESS_COOKIE,
+  isDashboardLinkAuthAvailable,
+  verifyDashboardAccessCode,
+} from "@/lib/dashboard-auth";
 import {
   deliveryQueueWhere,
   resolveTodayDashboardDateRange,
@@ -21,12 +27,17 @@ export default async function DeliveryDashboardPage({
 }) {
   const params = await searchParams;
   const lang = parseLocale(params.lang);
+  const cookieStore = await cookies();
+  const hasDashboardAccess = Boolean(
+    await verifyDashboardAccessCode(cookieStore.get(DASHBOARD_ACCESS_COOKIE)?.value),
+  );
 
   const t =
     lang === "el"
       ? {
           title: "Delivery",
           today: "Σήμερα",
+          back: "← Παραγγελίες",
           empty: "Δεν υπάρχουν παραγγελίες για delivery.",
           delivery: "Delivery",
           pickup: "Pickup",
@@ -41,6 +52,7 @@ export default async function DeliveryDashboardPage({
       : {
           title: "Delivery",
           today: "Today",
+          back: "← Orders",
           empty: "No delivery orders in the queue.",
           delivery: "Delivery",
           pickup: "Pickup",
@@ -106,10 +118,17 @@ export default async function DeliveryDashboardPage({
       <DashboardAutoRefresh />
       <header className="border-b border-zinc-200 bg-white px-4 py-4">
         <div className="mx-auto max-w-lg">
-          <h1 className="text-xl font-bold text-zinc-900">{shop.name}</h1>
-          <p className="text-sm text-zinc-500">
-            {t.title} · {t.today}
-          </p>
+          {hasDashboardAccess && (
+            <Link href={`/dashboard?lang=${lang}`} className="text-sm text-orange-600 underline">
+              {t.back}
+            </Link>
+          )}
+          <div className={hasDashboardAccess ? "mt-2" : undefined}>
+            <h1 className="text-xl font-bold text-zinc-900">{shop.name}</h1>
+            <p className="text-sm text-zinc-500">
+              {t.title} · {t.today}
+            </p>
+          </div>
         </div>
       </header>
 
