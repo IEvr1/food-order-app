@@ -83,6 +83,23 @@ function cartTotal(lines: CartLine[]) {
   return lines.reduce((s, l) => s + l.priceCents * l.quantity, 0);
 }
 
+function cartItemCount(lines: CartLine[]) {
+  return lines.reduce((n, l) => n + l.quantity, 0);
+}
+
+function cartQty(lines: CartLine[], menuItemId: string) {
+  return lines.find((l) => l.menuItemId === menuItemId)?.quantity ?? 0;
+}
+
+function cartSummaryText(lines: CartLine[], locale: Locale, maxItems = 3) {
+  const parts = lines.slice(0, maxItems).map((l) => `${l.quantity}× ${l.name}`);
+  const remaining = lines.length - maxItems;
+  if (remaining > 0) {
+    parts.push(locale === "el" ? `+${remaining} ακόμη` : `+${remaining} more`);
+  }
+  return parts.join(", ");
+}
+
 export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
 
@@ -91,6 +108,7 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
       ? {
           welcome: "Καλώς ήρθατε! Τι θα θέλατε να παραγγείλετε;",
           cart: "Καλάθι",
+          itemCount: (n: number) => (n === 1 ? "1 προϊόν" : `${n} προϊόντα`),
           continue: "Συνέχεια",
           emptyCart: "Το καλάθι είναι άδειο.",
           pickup: "Παραλαβή",
@@ -146,6 +164,7 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
       : {
           welcome: "Welcome! What would you like to order?",
           cart: "Cart",
+          itemCount: (n: number) => (n === 1 ? "1 item" : `${n} items`),
           continue: "Continue",
           emptyCart: "Your cart is empty.",
           pickup: "Pickup",
@@ -452,7 +471,7 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
         </div>
       </header>
 
-      <main className="flex-1 px-4 py-4 pb-28">
+      <main className="flex-1 px-4 py-4 pb-36">
         {step === "menu" && (
           <>
             <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
@@ -486,13 +505,38 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
                       {formatPriceEuros(item.priceCents, localeTag)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => addToCart(item)}
-                    className="shrink-0 rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    +
-                  </button>
+                  {cartQty(cart, item.id) > 0 ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => changeQty(item.id, -1)}
+                        className="h-9 w-9 rounded-lg bg-zinc-100 text-lg font-medium"
+                        aria-label={`${item.name} −`}
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center font-semibold text-zinc-900">
+                        {cartQty(cart, item.id)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item)}
+                        className="h-9 w-9 rounded-lg bg-orange-100 text-lg font-medium text-orange-700"
+                        aria-label={`${item.name} +`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      className="shrink-0 rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white"
+                      aria-label={`${item.name} +`}
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -810,20 +854,25 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
 
       {step === "menu" && cart.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 border-t border-orange-100 bg-white p-4 shadow-lg">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-zinc-500">{t.cart}</p>
-              <p className="font-bold text-orange-600">
-                {formatPriceEuros(cartTotal(cart), localeTag)}
-              </p>
+          <div className="mx-auto max-w-lg space-y-2">
+            <p className="truncate text-xs text-zinc-500">{cartSummaryText(cart, locale)}</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm text-zinc-500">
+                  {t.cart} · {t.itemCount(cartItemCount(cart))}
+                </p>
+                <p className="font-bold text-orange-600">
+                  {formatPriceEuros(cartTotal(cart), localeTag)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep("checkout")}
+                className="rounded-xl bg-orange-600 px-6 py-3 font-semibold text-white"
+              >
+                {t.continue}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setStep("checkout")}
-              className="rounded-xl bg-orange-600 px-6 py-3 font-semibold text-white"
-            >
-              {t.continue}
-            </button>
           </div>
         </div>
       )}
