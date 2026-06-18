@@ -30,6 +30,7 @@ type ShopInfo = {
   name: string;
   timezone: string;
   deliveryEnabled: boolean;
+  deliveryOpenNow?: boolean;
   latitude: number | null;
   longitude: number | null;
   deliveryRadiusMeters: number;
@@ -132,6 +133,9 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           privacy: "Πολιτική απορρήτου",
           failed: "Η παραγγελία απέτυχε.",
           deliveryDisabled: "Το delivery δεν είναι διαθέσιμο.",
+          deliveryClosedNow: "Το delivery δεν δέχεται παραγγελίες αυτή τη στιγμή (εκτός ωραρίου).",
+          deliveryNotConfigured:
+            "Το delivery δεν είναι ρυθμισμένο. Ορίστε θέση, ακτίνα και ωράριο delivery στις ρυθμίσεις.",
           confirmCancel: "Να ακυρωθεί η παραγγελία;",
           yes: "Ναι",
           no: "Όχι",
@@ -181,6 +185,9 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           privacy: "Privacy policy",
           failed: "Order failed.",
           deliveryDisabled: "Delivery is not available.",
+          deliveryClosedNow: "Delivery is not accepting orders right now (outside delivery hours).",
+          deliveryNotConfigured:
+            "Delivery is not set up. Configure location, radius, and delivery hours in settings.",
           confirmCancel: "Cancel this order?",
           yes: "Yes",
           no: "No",
@@ -545,7 +552,10 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
               </button>
             </div>
             {!shop?.deliveryEnabled && (
-              <p className="text-xs text-amber-700">{t.deliveryDisabled}</p>
+              <p className="text-xs text-amber-700">{t.deliveryNotConfigured}</p>
+            )}
+            {shop?.deliveryEnabled && shop.deliveryOpenNow === false && !isScheduled && (
+              <p className="text-xs text-amber-700">{t.deliveryClosedNow}</p>
             )}
 
             {!isScheduled && estimateMinutes != null && (
@@ -653,7 +663,11 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
                 loading ||
                 (isScheduled && (!scheduleDate || !scheduleTime)) ||
                 cart.length === 0 ||
-                (fulfillment === "DELIVERY" && !deliveryLocation)
+                (fulfillment === "DELIVERY" && !deliveryLocation) ||
+                (fulfillment === "DELIVERY" &&
+                  !isScheduled &&
+                  shop?.deliveryEnabled === true &&
+                  shop.deliveryOpenNow === false)
               }
               onClick={() => void submitOrder()}
               className="w-full rounded-xl bg-orange-600 py-3 font-semibold text-white disabled:opacity-50"

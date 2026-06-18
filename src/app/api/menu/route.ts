@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureShopSeed } from "@/lib/bootstrap";
-import { isDeliveryEnabled } from "@/lib/delivery-zone";
+import { getCustomerDeliveryStatus } from "@/lib/delivery-availability";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -26,12 +26,15 @@ export async function GET() {
     return NextResponse.json({ error: "Shop not found" }, { status: 500 });
   }
 
+  const delivery = await getCustomerDeliveryStatus(shop);
+
   return NextResponse.json({
     shop: {
       id: shop.id,
       name: shop.name,
       timezone: shop.timezone,
-      deliveryEnabled: isDeliveryEnabled(shop),
+      deliveryEnabled: delivery.enabled,
+      deliveryOpenNow: delivery.openNow,
       latitude: shop.latitude,
       longitude: shop.longitude,
       deliveryRadiusMeters: shop.deliveryRadiusMeters,
