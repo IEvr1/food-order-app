@@ -2,10 +2,29 @@ import { prisma } from "@/lib/prisma";
 
 const DEMO_SHOP_LAT = 35.1856;
 const DEMO_SHOP_LNG = 33.3823;
+const DEFAULT_DELIVERY_RADIUS_METERS = 3000;
+
+async function ensureDeliveryDefaults() {
+  const shop = await prisma.shop.findFirst({
+    select: { id: true, latitude: true, longitude: true, deliveryRadiusMeters: true },
+  });
+  if (
+    shop &&
+    shop.latitude != null &&
+    shop.longitude != null &&
+    shop.deliveryRadiusMeters === 0
+  ) {
+    await prisma.shop.update({
+      where: { id: shop.id },
+      data: { deliveryRadiusMeters: DEFAULT_DELIVERY_RADIUS_METERS },
+    });
+  }
+}
 
 export async function ensureShopSeed() {
   const shopCount = await prisma.shop.count();
   if (shopCount > 0) {
+    await ensureDeliveryDefaults();
     return;
   }
 
@@ -15,7 +34,7 @@ export async function ensureShopSeed() {
       timezone: "Europe/Nicosia",
       latitude: DEMO_SHOP_LAT,
       longitude: DEMO_SHOP_LNG,
-      deliveryRadiusMeters: 0,
+      deliveryRadiusMeters: DEFAULT_DELIVERY_RADIUS_METERS,
       prepMinutes: 25,
       deliveryPrepMinutes: 45,
       hours: {

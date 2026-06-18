@@ -10,7 +10,8 @@ import {
   isDeliveryMutationAuthorized,
 } from "@/lib/dashboard-auth";
 import { computeDeliveryEta } from "@/lib/delivery-eta";
-import { isDeliveryEnabled, validateDeliveryLocation } from "@/lib/delivery-zone";
+import { getCustomerDeliveryStatus } from "@/lib/delivery-availability";
+import { validateDeliveryLocation } from "@/lib/delivery-zone";
 import { parseLocale, type Locale } from "@/lib/locale";
 import { prisma } from "@/lib/prisma";
 import {
@@ -53,6 +54,7 @@ const prepTimesSchema = z.object({
 const settingsSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
+  address: z.string().max(500).nullable(),
   deliveryRadiusKm: z.number().min(0).max(15),
   prepMinutes: prepMinutesSchema,
   deliveryPrepMinutes: prepMinutesSchema,
@@ -260,6 +262,7 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
       data: {
         latitude: data.latitude,
         longitude: data.longitude,
+        address: data.address,
         deliveryRadiusMeters: Math.round(data.deliveryRadiusKm * 1000),
         prepMinutes: data.prepMinutes,
         deliveryPrepMinutes: data.deliveryPrepMinutes,
@@ -288,11 +291,20 @@ export async function updateShopDeliverySettings(input: z.infer<typeof settingsS
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");
   revalidatePath("/chat");
-  return { ok: true as const, deliveryEnabled: isDeliveryEnabled({
+  const delivery = await getCustomerDeliveryStatus({
+    id: shop.id,
     latitude: data.latitude,
     longitude: data.longitude,
     deliveryRadiusMeters: Math.round(data.deliveryRadiusKm * 1000),
-  }) };
+    timezone: shop.timezone,
+    prepMinutes: data.prepMinutes,
+    deliveryPrepMinutes: data.deliveryPrepMinutes,
+  });
+  return {
+    ok: true as const,
+    deliveryEnabled: delivery.enabled,
+    deliveryOpenNow: delivery.openNow,
+  };
 }
 
 export async function validateShopDeliveryZone(lat: number, lng: number, lang?: string) {

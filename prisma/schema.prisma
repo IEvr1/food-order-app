@@ -25,6 +25,7 @@ enum FulfillmentType {
 model Shop {
   id                   String                @id @default(cuid())
   name                 String
+  address              String?
   timezone             String                @default("Europe/Nicosia")
   latitude             Float?
   longitude            Float?

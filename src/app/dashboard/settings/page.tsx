@@ -24,6 +24,7 @@ export default async function DashboardSettingsPage({
       lang={lang}
       shop={{
         name: shop.name,
+        address: shop.address,
         latitude: shop.latitude,
         longitude: shop.longitude,
         deliveryRadiusMeters: shop.deliveryRadiusMeters,
