@@ -121,7 +121,6 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           manageClosed:
             "Η παραγγελία επιβεβαιώθηκε. Δεν μπορεί πλέον να τροποποιηθεί ή να ακυρωθεί.",
           viewOnly: "Μπορείτε να δείτε την κατάσταση της παραγγελίας σας.",
-          linkExpired: "Ο σύνδεσμος έληξε. Μπορείτε να κάνετε νέα παραγγελία από το μενού.",
           cancelledHint: "Η παραγγελία ακυρώθηκε. Μπορείτε να κάνετε νέα παραγγελία.",
           history: "Ιστορικό (4 τελευταίες)",
           active: "Ενεργές παραγγελίες",
@@ -171,7 +170,6 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
           manageCountdown: (time: string) => `Time to change or cancel: ${time}`,
           manageClosed: "Your order is confirmed and can no longer be changed or cancelled.",
           viewOnly: "You can view your order status here.",
-          linkExpired: "This link has expired. You can place a new order from the menu.",
           cancelledHint: "This order was cancelled. You can place a new order.",
           history: "History (last 4)",
           active: "Active orders",
@@ -215,7 +213,6 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
     isScheduled: boolean;
   } | null>(null);
   const [manage, setManage] = useState<ManageSummary | null>(null);
-  const [linkNotice, setLinkNotice] = useState<string | null>(null);
 
   const localeTag = locale === "el" ? "el-GR" : "en-US";
 
@@ -249,11 +246,6 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
     if (res.status === 401) {
       setManage(null);
       if (fromLink) {
-        setLinkNotice(
-          locale === "el"
-            ? "Ο σύνδεσμος έληξε. Μπορείτε να κάνετε νέα παραγγελία από το μενού."
-            : "This link has expired. You can place a new order from the menu.",
-        );
         setStep("menu");
         const url = new URL(window.location.href);
         url.searchParams.delete("fromLink");
@@ -454,11 +446,6 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
       </header>
 
       <main className="flex-1 px-4 py-4 pb-28">
-        {linkNotice && step === "menu" && (
-          <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-100">
-            {linkNotice}
-          </p>
-        )}
         {step === "menu" && (
           <>
             <div className="mb-4 flex gap-2 overflow-x-auto pb-1">

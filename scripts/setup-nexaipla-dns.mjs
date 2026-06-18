@@ -1,15 +1,19 @@
 /**
- * Add Vercel A records for food-order-app subdomains on nexaipla.com (Cloudflare DNS).
- * Requires CLOUDFLARE_API_TOKEN in .env (Zone DNS Write for nexaipla.com).
+ * Add Vercel A record for a food-order-app subdomain on nexaipla.com (Cloudflare DNS).
+ * One subdomain per restaurant deployment — chat, dashboard, and SMS links share it.
  *
- * Usage: node scripts/setup-nexaipla-dns.mjs
+ * Usage:
+ *   node scripts/setup-nexaipla-dns.mjs
+ *   SHOP_SUBDOMAIN=souvlaki node scripts/setup-nexaipla-dns.mjs
+ *
+ * Requires CLOUDFLARE_API_TOKEN in .env (Zone DNS Write for nexaipla.com).
  */
 import fs from "node:fs";
 import path from "node:path";
 
 const VERCEL_A = "76.76.21.21";
 const ZONE = "nexaipla.com";
-const SUBDOMAINS = ["foodorder", "orders"];
+const SUBDOMAIN = (process.env.SHOP_SUBDOMAIN ?? "foodorder").trim() || "foodorder";
 
 function loadEnvFile(filename) {
   const fullPath = path.join(process.cwd(), filename);
@@ -39,9 +43,7 @@ const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
 if (!token) {
   console.error("Set CLOUDFLARE_API_TOKEN in .env (Zone DNS Write for nexaipla.com).");
   console.error("Manual DNS (Cloudflare dashboard):");
-  for (const sub of SUBDOMAINS) {
-    console.error(`  A  ${sub}.${ZONE}  ->  ${VERCEL_A}  (Proxy: DNS only / grey cloud)`);
-  }
+  console.error(`  A  ${SUBDOMAIN}.${ZONE}  ->  ${VERCEL_A}  (Proxy: DNS only / grey cloud)`);
   process.exitCode = 1;
   process.exit();
 }
@@ -93,8 +95,6 @@ if (!zone) {
   process.exit(1);
 }
 
-for (const sub of SUBDOMAINS) {
-  await ensureARecord(zone.id, `${sub}.${ZONE}`);
-}
+await ensureARecord(zone.id, `${SUBDOMAIN}.${ZONE}`);
 
-console.log("Done. Vercel will verify domains within a few minutes.");
+console.log(`Done. Set APP_BASE_URL=https://${SUBDOMAIN}.${ZONE} in Vercel env vars.`);

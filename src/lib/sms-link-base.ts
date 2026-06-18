@@ -57,12 +57,23 @@ export function getAppBaseUrl(request?: Request): string {
   }
 
   if (process.env.NODE_ENV === "production") {
-    throw new Error("APP_BASE_URL or SMS_LINK_BASE_URL must be set to a real public URL");
+    throw new Error("APP_BASE_URL must be set to a real public URL");
   }
 
   return DEFAULT_DEV_APP_BASE_URL;
 }
 
+/** SMS short links use the same origin as the app (one domain per shop). */
 export function getSmsLinkBaseUrl(request?: Request): string {
-  return getConfiguredBaseUrl("SMS_LINK_BASE_URL") ?? getAppBaseUrl(request);
+  return getAppBaseUrl(request);
+}
+
+/** True when the request arrived on the app host (where manage session cookies must be set). */
+export function requestMatchesAppBase(request: Request): boolean {
+  try {
+    const appBase = getAppBaseUrl(request);
+    return normalizeBaseUrl(new URL(request.url).origin) === normalizeBaseUrl(new URL(appBase).origin);
+  } catch {
+    return false;
+  }
 }
