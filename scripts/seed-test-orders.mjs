@@ -338,12 +338,16 @@ try {
   console.log(`Σήμερα: ${todayIso}`);
   console.log(`Χθες: ${yesterdayIso}`);
 
+  const countArg = Number(process.argv[2]);
+  const todaySpecs =
+    countArg > 0 ? TODAY_ORDER_SPECS.slice(0, countArg) : TODAY_ORDER_SPECS;
+
   const todayCount = await createOrdersForDay(
     prisma,
     shop,
     menuItems,
     todayIso,
-    TODAY_ORDER_SPECS,
+    todaySpecs,
     "Σήμερα",
   );
 

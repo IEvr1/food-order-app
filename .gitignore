@@ -48,3 +48,6 @@ dev.db
 # one-off migration backups (customer data)
 scripts/db-backup.json
 scripts/db-import-payload.json
+
+# local marketing video assets (recordings, exports — not committed)
+/marketing/video-assets/
