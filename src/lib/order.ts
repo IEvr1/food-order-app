@@ -50,10 +50,21 @@ export type ResolvedCartLine = {
 };
 
 export function formatPriceEuros(cents: number, locale = "el-GR"): string {
-  return new Intl.NumberFormat(locale, {
+  const formatter = new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "EUR",
-  }).format(cents / 100);
+  });
+  const parts = formatter.formatToParts(cents / 100);
+  const currencyPart = parts.find((p) => p.type === "currency");
+  const amount = parts
+    .filter((p) => p.type !== "currency")
+    .map((p) => p.value)
+    .join("")
+    .trim();
+  if (currencyPart) {
+    return `${currencyPart.value}${amount}`;
+  }
+  return formatter.format(cents / 100);
 }
 
 export async function resolveCartLines(
