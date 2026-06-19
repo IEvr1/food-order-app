@@ -96,3 +96,51 @@ export async function runRetentionCleanup(): Promise<RetentionCleanupResult> {
     customersRemaining: Math.max(0, eligibleIds.length - batchIds.length),
   };
 }
+
+const DEFAULT_MAX_BATCHES = 50;
+
+/** Run retention cleanup until no eligible customers remain or batch cap is hit. */
+export async function runRetentionCleanupFully(options?: {
+  maxBatches?: number;
+}): Promise<RetentionCleanupResult & { batches: number }> {
+  const maxBatches = options?.maxBatches ?? DEFAULT_MAX_BATCHES;
+  let batches = 0;
+  let expiredSmsTokens = 0;
+  let expiredSessions = 0;
+  let customersDeleted = 0;
+  let lastResult: RetentionCleanupResult | null = null;
+
+  while (batches < maxBatches) {
+    const result = await runRetentionCleanup();
+    batches += 1;
+    lastResult = result;
+    expiredSmsTokens += result.expiredSmsTokens;
+    expiredSessions += result.expiredSessions;
+    customersDeleted += result.customersDeleted;
+    if (result.customersRemaining === 0) break;
+  }
+
+  if (!lastResult) {
+    return {
+      retentionDays: retentionDaysFromEnv(),
+      cutoff: subDays(new Date(), retentionDaysFromEnv()).toISOString(),
+      expiredSmsTokens: 0,
+      expiredSessions: 0,
+      customersDeleted: 0,
+      customersEligible: 0,
+      customersRemaining: 0,
+      batches: 0,
+    };
+  }
+
+  return {
+    retentionDays: lastResult.retentionDays,
+    cutoff: lastResult.cutoff,
+    expiredSmsTokens,
+    expiredSessions,
+    customersDeleted,
+    customersEligible: lastResult.customersEligible,
+    customersRemaining: lastResult.customersRemaining,
+    batches,
+  };
+}
