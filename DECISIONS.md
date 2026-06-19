@@ -99,7 +99,7 @@ Covered by `scripts/security-audit.mjs` — integration test creates an order, e
 
 ## ADR-004: PII handling and retention
 
-**Status:** Accepted (policy); **Partial** (automation)
+**Status:** Accepted (policy + monthly cron)
 
 ### Decision
 
@@ -111,11 +111,9 @@ Covered by `scripts/security-audit.mjs` — integration test creates an order, e
 
 Retention logic lives in [`src/lib/retention-cleanup.ts`](src/lib/retention-cleanup.ts) (`DATA_RETENTION_DAYS`, default 365).
 
-### Gap
+### Automation
 
-`runRetentionCleanup()` is **not scheduled**. GDPR retention claim in [`src/app/privacy/page.tsx`](src/app/privacy/page.tsx) is not enforced automatically.
-
-### Next step → see [NS-001](#ns-001-schedule-data-retention-cleanup)
+`runRetentionCleanupFully()` runs via Vercel Cron on the **1st of each month at 05:00 UTC** (~07:00 Nicosia), route `GET /api/cron/retention`, protected by `CRON_SECRET`.
 
 ---
 
@@ -213,20 +211,13 @@ Prioritized backlog from security review and operational gaps. Status: **Open** 
 
 **Priority:** High  
 **Effort:** Small  
-**Status:** Open
+**Status:** Done
 
-Wire [`runRetentionCleanup()`](src/lib/retention-cleanup.ts) to a scheduled job.
+Wired [`runRetentionCleanupFully()`](src/lib/retention-cleanup.ts) to Vercel Cron:
 
-**Options:**
-
-1. **Vercel Cron** — daily route e.g. `GET /api/cron/retention` protected by `CRON_SECRET` header
-2. **External scheduler** — GitHub Actions, Neon cron, etc.
-
-**Acceptance criteria:**
-
-- Expired SMS tokens and conversation sessions deleted daily
-- Eligible customers (no active orders, last order &gt; retention window) deleted in batches
-- Log summary (counts deleted) for ops visibility
+- Route: `GET /api/cron/retention` (Bearer `CRON_SECRET`)
+- Schedule: `0 5 1 * *` — 1st of each month, ~07:00 Europe/Nicosia
+- Deletes expired SMS tokens, conversation sessions, and eligible customers in batches until done (cap 50 batches/run)
 
 ---
 
@@ -385,10 +376,10 @@ npm run dashboard:link   # generate owner link
 | ADR-001 | Single-shop MVP | Accepted |
 | ADR-002 | Capability-based auth | Accepted |
 | ADR-003 | Customer data segregation | Accepted |
-| ADR-004 | PII handling and retention | Accepted / automation pending |
+| ADR-004 | PII handling and retention | Accepted / monthly cron |
 | ADR-005 | Security audit fixes (2026-06-14) | Implemented |
 | ADR-006 | Deployment model — Vercel + DB ανά εστιατόριο | Accepted |
-| NS-001 | Schedule retention cleanup | Open |
+| NS-001 | Schedule retention cleanup | Done |
 | NS-002 | Rate limiting | Open |
 | NS-003 | Dashboard link expiry default | Open |
 | NS-004 | `.env.example` | Open |

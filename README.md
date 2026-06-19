@@ -75,6 +75,7 @@ The delivery link cannot access owner pages (settings, KPIs, etc.). The owner da
 | `APP_BASE_URL` | Public URL for this shop — chat, dashboard, **and** SMS manage links (`/l/:code`) |
 | `SMS_LINK_SECRET` | Signs customer manage links |
 | `DASHBOARD_LINK_SECRET` | Signs owner dashboard and delivery links |
+| `CRON_SECRET` | Auth for Vercel Cron (`GET /api/cron/retention`, 1st of month) |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Maps + Places for delivery |
 
 SMS via Twilio and/or `SMS_GATEWAY_URL` + `SMS_GATEWAY_API_KEY`.
