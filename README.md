@@ -77,7 +77,15 @@ The delivery link cannot access owner pages (settings, KPIs, etc.). The owner da
 | `DASHBOARD_LINK_SECRET` | Signs owner dashboard and delivery links |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Maps + Places for delivery |
 
-SMS via Twilio and/or `SMS_GATEWAY_URL` + `SMS_GATEWAY_API_KEY`.
+SMS via **WebSMS** ([websms.com.cy](https://www.websms.com.cy/en)) — set `WEBSMS_API_KEY` and `WEBSMS_SENDER_ID` (alphanumeric, up to 11 chars). Legacy modules `twilio-sms.ts` and `sms-gateway.ts` remain in the repo but are not used for sending.
+
+| Variable | Purpose |
+|----------|---------|
+| `WEBSMS_API_KEY` | REST API key from WebSMS account |
+| `WEBSMS_SENDER_ID` | Alphanumeric sender shown to customers |
+| `WEBSMS_GATEWAY_URL` | Optional; default `https://api.websms.com` |
+| `WEBSMS_MAX_SMS_PER_MESSAGE` | Optional; max SMS parts for long messages (default `3`) |
+| `WEBSMS_TEST` | Optional; `"true"` validates without sending |
 
 **One domain per restaurant:** set only `APP_BASE_URL` (e.g. `https://souvlaki.nexaipla.com`). SMS links look like `https://souvlaki.nexaipla.com/l/Ab12Cd34` — no separate orders subdomain.
 
@@ -100,7 +108,7 @@ The app is single-tenant in code (`shop.findFirst()`). To onboard another restau
 |----------------|--|
 | Vercel project | Link same repo, separate env |
 | `DATABASE_URL` | Dedicated Postgres (e.g. Neon) |
-| Secrets | Own `SMS_LINK_SECRET`, `DASHBOARD_LINK_SECRET`, Twilio, Maps key |
+| Secrets | Own `SMS_LINK_SECRET`, `DASHBOARD_LINK_SECRET`, WebSMS, Maps key |
 | `APP_BASE_URL` | One subdomain for everything, e.g. `https://souvlaki.nexaipla.com` (chat + SMS links) |
 
 **Quick onboarding:** new DB → new Vercel project → env vars → `prisma migrate deploy` → DNS → `npm run dashboard:link` → configure shop in Settings.
