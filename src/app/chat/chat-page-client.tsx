@@ -718,7 +718,11 @@ export function ChatPageClient({ initialLocale }: { initialLocale: Locale }) {
             >
               {loading ? t.submitting : t.submit}
             </button>
-            <button type="button" onClick={() => setStep("menu")} className="w-full text-sm text-zinc-600">
+            <button
+              type="button"
+              onClick={() => setStep("menu")}
+              className="w-full rounded-xl border border-orange-200 bg-orange-50 py-3 text-sm font-semibold text-orange-700"
+            >
               {t.backMenu}
             </button>
           </div>
